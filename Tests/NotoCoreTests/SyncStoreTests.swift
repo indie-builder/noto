@@ -44,7 +44,7 @@ final class SyncStoreTests: XCTestCase {
     }
 
     func testQueueSurvivesReopeningAndCapturesAnIndependentCLIConnection() throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let directory = tempDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appendingPathComponent("offline.sqlite")
         let firstMutationID: String
@@ -223,7 +223,7 @@ final class SyncStoreTests: XCTestCase {
     }
 
     func testDeletedTasksSurviveReopeningAndRestoreTheirContentAndConversation() throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let directory = tempDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appendingPathComponent("deleted.sqlite")
         let firstID: String, secondID: String
