@@ -35,7 +35,7 @@ final class CalendarTests: XCTestCase {
         let important = try store.add(kind: "todo", text: "重要", due: "2026-09-09", priority: "important")
         for i in 0..<25 { _ = try store.add(kind: "todo", text: "完成 \(i)", due: "2026-09-09", status: "completed") }
         let undated = try store.add(kind: "todo", text: "未安排", status: "completed")
-        let model = AppModel(store: store); model.switchMode(.calendar)
+        let model = try await makeModel(store); model.switchMode(.calendar)
         await model.waitForReload()
         model.selectCalendarDate(try XCTUnwrap(TaskDates.date("2026-09-09")))
         model.moveCalendarMonth(1)
@@ -57,7 +57,7 @@ final class CalendarTests: XCTestCase {
     }
 
     @MainActor func testCreationDateDefaultsDraftRetentionAndModeGuard() async throws {
-        let model = AppModel(store: try Store(url: nil)); model.switchMode(.calendar)
+        let model = try await makeModel(); model.switchMode(.calendar)
         await model.waitForReload()
         model.selectCalendarDate(try XCTUnwrap(TaskDates.date("2026-12-31")))
         model.showComposer()
@@ -87,7 +87,7 @@ final class CalendarTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: url) }
         let store = try Store(url: url), cli = try Store(url: url)
         let entry = try store.add(kind: "todo", text: "原日期", due: "2026-09-09", status: "completed", priority: "important")
-        let model = AppModel(store: store); model.switchMode(.calendar)
+        let model = try await makeModel(store); model.switchMode(.calendar)
         await model.waitForReload()
         XCTAssertTrue(model.rescheduleTask(entry, due: "2026-10-01"))
         await model.waitForReload()
@@ -127,7 +127,7 @@ final class CalendarTests: XCTestCase {
         let task = try store.convertToTodo(id: note.id)
         _ = try store.updateTodo(id: task.id, due: "2026-09-09", priority: "important")
         for i in 0..<45 { _ = try store.add(kind: "note", text: "更新的笔记 \(i)") }
-        let model = AppModel(store: store); model.switchMode(.calendar)
+        let model = try await makeModel(store); model.switchMode(.calendar)
         await model.waitForReload()
         model.setSearch("月历检索关键词"); model.setImportantOnly(true)
         await model.waitForReload()

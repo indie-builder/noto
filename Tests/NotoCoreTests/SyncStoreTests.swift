@@ -21,6 +21,14 @@ final class SyncStoreTests: XCTestCase {
         try store.list().first(where: { $0.id == id })?.text
     }
 
+    /// Acknowledge every queued mutation as applied, so downloads stop being masked by the outbox.
+    private func acknowledgeAll(_ store: Store) throws {
+        for (offset, mutation) in try store.pendingMutations().enumerated() {
+            try store.acknowledgeMutation(mutation, document: mutation.document, revision: Int64(offset + 1),
+                                          deleted: mutation.operation == "delete", outcome: "applied")
+        }
+    }
+
     func testOutboxSharesTheBusinessTransactionAndIgnoresNotesAndNoOpEdits() throws {
         let store = try syncedStore()
         _ = try store.add(kind: "note", text: "Local note")
@@ -210,10 +218,7 @@ final class SyncStoreTests: XCTestCase {
         XCTAssertEqual(try store.messages(for: note.id).map(\.role), messages.map(\.role))
 
         // The same backup guarantee must hold when a different device deletes the task.
-        for (offset, mutation) in try store.pendingMutations().enumerated() {
-            try store.acknowledgeMutation(mutation, document: mutation.document, revision: Int64(offset + 1),
-                                          deleted: mutation.operation == "delete", outcome: "applied")
-        }
+        try acknowledgeAll(store)
         let restored = try XCTUnwrap(store.todos().first)
         try store.applyRemoteTask(id: note.id, document: document(restored), revision: 100, deleted: true)
         XCTAssertTrue(try store.todos().isEmpty)
@@ -315,10 +320,7 @@ final class SyncStoreTests: XCTestCase {
             let task = try store.convertToTodo(id: note.id)
             try store.undo(before: [note], after: [task])
             if acknowledgeDeletion {
-                for (offset, mutation) in try store.pendingMutations().enumerated() {
-                    try store.acknowledgeMutation(mutation, document: mutation.document, revision: Int64(offset + 1),
-                                                  deleted: mutation.operation == "delete", outcome: "applied")
-                }
+                try acknowledgeAll(store)
             }
             _ = try store.convertToTodo(id: note.id)
             let reconversion = try XCTUnwrap(store.pendingMutations().last)

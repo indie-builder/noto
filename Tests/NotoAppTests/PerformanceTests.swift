@@ -48,8 +48,7 @@ final class PerformanceTests: XCTestCase {
         let store = try Store(url: nil)
         for i in 0..<85 { _ = try store.add(kind: "note", text: "笔记 \(i)") }
         let task = try store.add(kind: "todo", text: "任务目标")
-        let model = AppModel(store: store)
-        await model.waitForReload()
+        let model = try await makeModel(store)
         XCTAssertEqual(model.entries.count, 40)
         XCTAssertTrue(model.tasks.isEmpty, "Notes must not load the task archive")
         model.loadMore(); model.loadMore()

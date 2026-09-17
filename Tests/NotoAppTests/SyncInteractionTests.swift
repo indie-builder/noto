@@ -6,8 +6,7 @@ final class SyncInteractionTests: XCTestCase {
     @MainActor func testAccountSwitchRefusesUnsentAndHiddenDrafts() async throws {
         let store = try Store(url: nil)
         let note = try store.startConversation("Saved conversation")
-        let model = AppModel(store: store)
-        await model.waitForReload()
+        let model = try await makeModel(store)
         model.drafts.composer = "Unsent note"
         XCTAssertFalse(model.canChangeSyncAccount())
         XCTAssertEqual(model.drafts.composer, "Unsent note")
@@ -29,7 +28,7 @@ final class SyncInteractionTests: XCTestCase {
         let local = try Store(url: nil), account = try Store(url: nil)
         let localTask = try local.add(kind: "todo", text: "Local account")
         let remoteTask = try account.add(kind: "todo", text: "Other account")
-        let model = AppModel(store: local)
+        let model = try await makeModel(local)
         model.mode = .board; model.reload(); await model.waitForReload()
         model.changeTask(localTask, status: "completed"); await model.waitForReload()
         XCTAssertTrue(model.undoAvailable)
@@ -50,7 +49,7 @@ final class SyncInteractionTests: XCTestCase {
         let store = try Store(url: nil)
         let task = try store.add(kind: "todo", text: "Delete then restore")
         let other = try store.add(kind: "todo", text: "Keep this")
-        let model = AppModel(store: store)
+        let model = try await makeModel(store)
         model.mode = .board; model.reload(); await model.waitForReload()
         model.deleteTask(task); await model.waitForReload()
         XCTAssertEqual(model.lastDeletedTaskID, task.id)
