@@ -3,7 +3,7 @@ import NotoCore
 @testable import NotoApp
 
 final class PerformanceTests: XCTestCase {
-    @MainActor func testLargeCalendarAndTimelineReadCost() async throws {
+    @MainActor func testLargeTimelineReadCost() async throws {
         let model = try await makeModel()
         let date = Date(timeIntervalSince1970: 1_780_000_000)
         model.tasks = (0..<10_000).map {
@@ -14,7 +14,7 @@ final class PerformanceTests: XCTestCase {
         let start = Date()
         var count = 0
         for _ in 0..<20 {
-            count += model.calendarGroups["2026-09-09"]?.count ?? 0
+            count += model.visibleTasks.count
             count += model.groups.reduce(0) { $0 + $1.entries.count }
         }
         XCTAssertEqual(count, 240_000)
@@ -25,19 +25,17 @@ final class PerformanceTests: XCTestCase {
         let first = Entry(kind: "todo", text: "第一条", due: "2026-09-09", priority: "important")
         let second = Entry(kind: "todo", text: "第二条", status: "completed")
         model.tasks = [first, second]; model.entries = [first]
-        XCTAssertEqual(model.calendarGroups[""]?.first, second)
         XCTAssertEqual(model.taskColumns["pending"]?.first, first)
         XCTAssertEqual(model.groups.flatMap(\.entries), [first])
         model.drafts.composer = "输入不应改变数据分组"
-        XCTAssertEqual(model.calendarTasks.count, 2)
+        XCTAssertEqual(model.visibleTasks.count, 2)
         model.importantOnly = true
         XCTAssertEqual(model.visibleTasks, [first])
-        XCTAssertNil(model.calendarGroups[""])
         XCTAssertNil(model.taskColumns["completed"])
         model.tasks = [second]
-        XCTAssertTrue(model.calendarTasks.isEmpty)
         model.importantOnly = false
-        XCTAssertEqual(model.calendarGroups[""]?.first, second)
+        XCTAssertEqual(model.visibleTasks, [second])
+        XCTAssertNil(model.taskColumns["pending"])
         model.editing = second
         XCTAssertEqual(Set(model.groups.flatMap(\.entries).map(\.id)), Set([first.id, second.id]))
         model.editing = nil; model.entries = []
@@ -64,7 +62,7 @@ final class PerformanceTests: XCTestCase {
         XCTAssertFalse(model.loadingMore)
         XCTAssertFalse(model.hasMore)
         model.setSearch("不存在")
-        model.switchMode(.calendar)
+        model.switchMode(.board)
         await model.waitForReload()
         XCTAssertEqual(model.tasks.map(\.id), [task.id])
         XCTAssertTrue(model.search.isEmpty)
