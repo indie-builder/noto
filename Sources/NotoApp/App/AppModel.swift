@@ -73,6 +73,7 @@ final class AppModel: ObservableObject {
     @Published var undoAvailable = false
     @Published var provider: Provider { didSet { UserDefaults.standard.set(provider.rawValue, forKey: "provider") } }
     private(set) var store: Store?
+    private(set) var pill: PillController?
     @Published private(set) var sync: SyncController?
     @Published var lastDeletedTaskID: String?
     private var syncSubscriptions = Set<AnyCancellable>()
@@ -119,6 +120,7 @@ final class AppModel: ObservableObject {
     init(store injectedStore: Store? = nil) {
         persistsViewMode = injectedStore == nil && ProcessInfo.processInfo.environment["NOTO_DATABASE"] == nil
         provider = Provider(rawValue: UserDefaults.standard.string(forKey: "provider") ?? "opencode") ?? .opencode
+        pill = PillController(appModel: self)
         if let injectedStore {
             store = injectedStore
         }
@@ -251,6 +253,7 @@ final class AppModel: ObservableObject {
                 if let tasks = result.2, tasks != self.tasks { self.tasks = tasks }
                 self.dataVersion = result.0
                 self.reloading = false
+                self.pill?.model.refresh()
                 if let id = self.taskToEditAfterReload {
                     self.taskToEditAfterReload = nil
                     if self.mode == .board, self.highlightedTaskID == id,

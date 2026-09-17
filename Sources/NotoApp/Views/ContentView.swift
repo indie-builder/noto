@@ -3,6 +3,7 @@ import AppKit
 import NotoCore
 
 struct ContentView: View {
+    @Environment(\.openWindow) private var openWindow
     @ObservedObject var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("datesExpanded") private var datesExpanded = true
@@ -132,6 +133,8 @@ struct ContentView: View {
         .toolbarBackground(.hidden, for: .windowToolbar)
         .onAppear {
             NotoMotion.start()
+            model.pill?.showWindow = { openWindow(id: "main") }
+            model.pill?.start()
         }
         .onChange(of: model.mode) { _, mode in
             NSApp.windows.first(where: { $0.identifier?.rawValue == "main" })?.isMovableByWindowBackground = mode == .notes

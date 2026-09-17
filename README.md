@@ -8,7 +8,7 @@ SwiftPM 多 target，依赖方向单向：`NotoCore ← NotoSync ← NotoApp`、
 
 - **NotoCore**：数据模型（`Models.swift`）、SQLite 持久化与业务操作（`Store` 按域拆为 Timeline / Conversation / Mutation 三个扩展，搜索走 trigram FTS）、同步落库/outbox（`SyncStore.swift`）、AI CLI 调用（`Agent.swift`）、统一日志（`NotoLog.swift`）。不含 UI 与网络传输。
 - **NotoSync**：同步传输层——Supabase 认证、PowerSync 副本、自适应轮询与冲突处理（登录态下有待传 2s / 空闲 15s / 失败指数退避）。落库都在 NotoCore，因此 CLI 不依赖本模块。
-- **NotoApp**：macOS 主应用，按目录分层——`App/`（AppModel 按域拆分 + `TextDrafts` 输入草稿，逐键文本不触发整树刷新）、`Views/`（主窗口三视图与行组件）、`Input/`（NSTextView 桥与搜索框）、`Design/`（设计令牌与玻璃材质）。
+- **NotoApp**：macOS 主应用，按目录分层——`App/`（AppModel 按域拆分 + `TextDrafts` 输入草稿，逐键文本不触发整树刷新）、`Views/`（主窗口三视图与行组件）、`Input/`（NSTextView 桥与搜索框）、`Design/`（设计令牌与玻璃材质）、`Pill/`（屏幕边缘药丸，四边几何由 `PillEdge.contentTransform` 统一映射）。
 - **NotoCLI**：`noto` 命令（ArgumentParser），与 App 共享同一个 Store；账号库指针 `active-account.json` 的路径常量收口在 `Store.activeAccountPointer`，由 NotoSync 写入。
 - **backend/**：Supabase 迁移、PowerSync sync-rules、本地开发栈与契约测试。
 
@@ -25,6 +25,10 @@ SwiftPM 多 target，依赖方向单向：`NotoCore ← NotoSync ← NotoApp`、
 ## 桌面端任务同步
 
 桌面端保留 Supabase + PowerSync 任务同步，支持离线写入、账号隔离、冲突保留与任务删除恢复；记录和 AI 对话仍保存在当前设备。登录后可明确导入历史任务。
+
+## 屏幕边缘的待办药丸
+
+macOS 版有一枚吸附在屏幕边缘的贴边面板：平时只是贴边的一小块，鼠标悬停即展开「今日待办」进度环、「写一笔」和设置入口，再悬停到具体元素会弹出带箭头的描述卡（今日到期与逾期、操作说明）。点击环在看板查看，点击「写一笔」唤起主窗口录入。药丸悬浮于所有窗口之上、不抢焦点，全屏应用在前台时自动收起。右键菜单可换边或隐藏；按住 ⌥ 拖动可沿边缘移动，拖到别的屏幕边即换边；「设置 → 屏幕边缘」可悬停/常驻/隐藏、选择四条边与通透/纯黑材质，并可恢复居中。收起命中区沿边方向不变、进深方向加宽，玻璃表面按系统原生大面积采样再裁剪绘制，旧系统与降低透明度时回退纯黑。组件预览：`build/Noto.app --args --preview-pill`。贴边窗口机制改编自 [codenotch](https://github.com/vinzdg/codenotch)（MIT License，© vinzdg，见 THIRD-PARTY-NOTICES/codenotch.txt）。
 
 ## 下载与安装
 
