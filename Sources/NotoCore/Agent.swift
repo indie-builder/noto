@@ -174,21 +174,24 @@ public final class AgentRunner: @unchecked Sendable {
         if provider == .codex { text = try Self.readOutput(lastMessage) }
         else { text = try Self.readOutput(output) }
         if provider == .opencode {
-            text = text.components(separatedBy: .newlines).compactMap { line -> String? in
-                guard let data = line.data(using: .utf8), let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any], event["type"] as? String == "text", let part = event["part"] as? [String: Any] else { return nil }
-                return part["text"] as? String
-            }.joined()
+            text = Self.jsonLines(text).filter { ($0["type"] as? String) == "text" }
+                .compactMap { ($0["part"] as? [String: Any])?["text"] as? String }.joined()
         }
         if provider == .kimi {
-            text = text.components(separatedBy: .newlines).compactMap { line -> String? in
-                guard let data = line.data(using: .utf8), let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any], event["role"] as? String == "assistant" else { return nil }
-                return event["content"] as? String
-            }.last ?? ""
+            text = Self.jsonLines(text).filter { ($0["role"] as? String) == "assistant" }
+                .compactMap { $0["content"] as? String }.last ?? ""
         }
         let response = try history == nil ? Self.decode(text) : Self.decodeConversation(text)
         transcript.append(["role": "assistant", "text": response.message])
         try encoder.encode(transcript).write(to: workspace.appendingPathComponent("conversation.json"), options: .atomic)
         return response
+    }
+
+    /// NDJSON 流式输出：每行一个 JSON 事件，解析失败的行（心跳、注释）跳过。
+    private static func jsonLines(_ output: String) -> [[String: Any]] {
+        output.components(separatedBy: .newlines).compactMap {
+            ($0.data(using: .utf8)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        }
     }
 
     private static func readOutput(_ url: URL, limit: Int = 2_000_000) throws -> String {

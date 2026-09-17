@@ -33,16 +33,14 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     appearancePage
                     settingsGroup {
-                        HStack(spacing: 12) {
-                            Text("AI 工具").font(.system(size: 13, weight: .medium))
-                            Spacer(minLength: 8)
+                        settingsRow("AI 工具") {
                             Picker("AI 工具", selection: $model.provider) {
                                 ForEach(Provider.allCases) { provider in
                                     Label { Text(provider.title) } icon: { Image(nsImage: provider.settingsIcon) }.tag(provider)
                                 }
-                            }.labelsHidden().pickerStyle(.menu).fixedSize().frame(width: 216, alignment: .trailing)
+                            }.labelsHidden().pickerStyle(.menu)
                                 .help("下一次请求生效，正在执行的请求不受影响。")
-                        }.frame(minHeight: 36)
+                        }
                     }
                     VStack(spacing: 4) {
                         Button { accountExpanded.toggle() } label: {
@@ -89,18 +87,14 @@ struct SettingsView: View {
 
     private var appearancePage: some View {
         settingsGroup {
-            HStack {
-                Text("屏幕边缘")
-                Spacer()
+            settingsRow("屏幕边缘") {
                 Picker("屏幕边缘", selection: edgeVisibility) {
                     Text("悬停展开").tag("hover")
                     Text("常驻").tag("always")
                     Text("隐藏").tag("hidden")
-                }.labelsHidden().pickerStyle(.segmented).fixedSize().frame(width: 216, alignment: .trailing)
-            }.frame(minHeight: 36)
-            HStack {
-                Text("位置")
-                Spacer()
+                }.labelsHidden().pickerStyle(.segmented)
+            }
+            settingsRow("位置") {
                 Menu {
                     Picker("位置", selection: $pillEdge) {
                         ForEach(PillEdge.allCases) { edge in Text(edge.label).tag(edge.rawValue) }
@@ -108,17 +102,24 @@ struct SettingsView: View {
                     Button("恢复居中") { model.pill?.resetPosition() }.disabled(!pillEnabled)
                 } label: {
                     Text((PillEdge(rawValue: pillEdge) ?? .right).label)
-                }.fixedSize().frame(width: 216, alignment: .trailing).accessibilityLabel("边缘位置")
-            }.frame(minHeight: 36)
-            HStack {
-                Text("材质")
-                Spacer()
+                }.accessibilityLabel("边缘位置")
+            }
+            settingsRow("材质") {
                 Picker("材质", selection: $pillSurface) {
                     Text("玻璃").tag("glass")
                     Text("纯黑").tag("black")
-                }.labelsHidden().pickerStyle(.segmented).fixedSize().frame(width: 216, alignment: .trailing)
-            }.frame(minHeight: 36)
+                }.labelsHidden().pickerStyle(.segmented)
+            }
         }
+    }
+
+    /// 标签在左、控件靠右对齐的一行；控件统一宽度让设置页两列对齐。
+    private func settingsRow<Content: View>(_ label: String, @ViewBuilder control: () -> Content) -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            control().fixedSize().frame(width: 216, alignment: .trailing)
+        }.frame(minHeight: 36)
     }
 
     private func settingsGroup<Content: View>(@ViewBuilder content: () -> Content) -> some View {
