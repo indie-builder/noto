@@ -9,6 +9,13 @@ enum NotoDesign {
     static let radius: CGFloat = 12
 }
 
+extension View {
+    /// Fixed frame in one call; pairs with PillEdge.size(along:across:).
+    func frame(_ size: CGSize, alignment: Alignment = .center) -> some View {
+        frame(width: size.width, height: size.height, alignment: alignment)
+    }
+}
+
 // Shared chrome for actions; native menus retain their keyboard behavior.
 
 /// 按压缩放 + 悬停衬底 + 禁用降透明，是全部按钮样式的公共内核。

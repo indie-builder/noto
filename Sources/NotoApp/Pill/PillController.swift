@@ -16,21 +16,21 @@ final class PillController: NSObject {
     // 窗口固定为最大展开尺寸，悬停只改变内部剪影，不再改变窗口框。
     static let collapsedAcross: CGFloat = 26 * PillMetrics.scale
     static let collapsedLength: CGFloat = 210 * PillMetrics.scale
-    nonisolated static let barAcross: CGFloat = PillMetrics.depth
     static let barLength: CGFloat = PillMetrics.length + 64
     static let bodyLength: CGFloat = PillMetrics.length
     static let bodyStart: CGFloat = PillMetrics.start
-    static let tabAlong: CGFloat = bodyStart + (bodyLength - collapsedLength) / 2
     static let cardGap: CGFloat = 10.5
     static let cardAcross: CGFloat = 254.2
+    /// 悬停卡沿边方向的宽度（水平边时即卡的宽度）。
+    static let cardAlong: CGFloat = 226
+    /// 悬停卡在进深方向的最大占用（含尾巴）；水平边按它预留窗口。
+    static let cardAcrossLimit: CGFloat = 272
 
     /// 展开/收起共用的弹簧；窗口框纹丝不动，只有剪影在窗口内形变。
     static let spring = Animation.spring(response: 0.42, dampingFraction: 0.78)
 
     static func windowSize(for edge: PillEdge) -> CGSize {
-        edge.isVertical
-            ? CGSize(width: ceil(barAcross + cardGap + cardAcross), height: ceil(PillMetrics.length(for: edge) + 64))
-            : CGSize(width: ceil(PillMetrics.length(for: edge) + 64), height: ceil(PillMetrics.depth(for: edge) + cardGap + 272))
+        edge.size(along: ceil(PillMetrics.length(for: edge) + 64), across: ceil(PillMetrics.depth(for: edge) + cardGap + (edge.isVertical ? cardAcross : cardAcrossLimit)))
     }
 
     /// 光标离开后收起的宽限。
@@ -212,19 +212,16 @@ final class PillController: NSObject {
         rect(across: barDepth, along: 0, depth: Self.cardGap, length: PillMetrics.length(for: edge) + 64)
     }
 
+    /// 悬停卡框：连同尾巴在「右侧」规范空间里布局（尾巴贴边），再由 contentTransform
+    /// 映射到实际边——四条边一份代码；沿边方向夹在窗口内并对准悬停元素。
     static func cardFrame(edge: PillEdge, element: PillElement, height: CGFloat, panelSize: CGSize) -> CGRect {
-        let width: CGFloat = edge.isVertical ? cardAcross : 226
-        let depth: CGFloat = edge.isVertical ? height : height + 28.2
-        let alongLength = edge.isVertical ? height : width
-        let alongLimit = edge.isVertical ? panelSize.height : panelSize.width
-        let origin = min(max(element.centerAlong(for: edge) - alongLength / 2, 0), max(0, alongLimit - alongLength))
+        let across = edge.isVertical ? cardAcross : height + 28.2
+        let along = edge.isVertical ? height : cardAlong
+        let canonical = edge.canonicalSize(of: panelSize)
         let gap = PillMetrics.depth(for: edge) + cardGap
-        switch edge {
-        case .right: return CGRect(x: panelSize.width - gap - width, y: origin, width: width, height: height)
-        case .left: return CGRect(x: gap, y: origin, width: width, height: height)
-        case .top: return CGRect(x: origin, y: gap, width: width, height: depth)
-        case .bottom: return CGRect(x: origin, y: panelSize.height - gap - depth, width: width, height: depth)
-        }
+        let origin = min(max(element.centerAlong(for: edge) - along / 2, 0), max(0, canonical.height - along))
+        return CGRect(x: canonical.width - gap - across, y: origin, width: across, height: along)
+            .applying(edge.contentTransform(in: panelSize))
     }
     private var cardRect: CGRect {
         Self.cardFrame(edge: edge, element: model.hovered ?? .today, height: model.cardHeight(for: model.hovered ?? .today), panelSize: Self.windowSize(for: edge))
@@ -243,10 +240,15 @@ final class PillController: NSObject {
              depth: barDepth - 6, length: element.extent(for: edge))
     }
 
+    /// 药丸条上命中的元素；命中矩形与 PillViews 的布局共用同一套沿边几何。
+    private func element(at local: CGPoint) -> PillElement? {
+        [PillElement.today, .compose, .settings, .move].first { elementRect($0).contains(local) }
+    }
+
     func hoverTarget(at local: CGPoint) -> PillElement? {
         if model.hasCard && (cardRect.contains(local) || bridgeRect.contains(local)) { return model.hovered }
         guard barRect.contains(local) else { return nil }
-        return [PillElement.today, .compose, .settings, .move].first { elementRect($0).contains(local) }
+        return element(at: local)
     }
 
     // MARK: - 光标监视与悬停
@@ -337,8 +339,7 @@ final class PillController: NSObject {
 
     private func handleClick(local: CGPoint) {
         guard model.expanded else { setExpanded(true, animate: true); return }
-        let element = model.hasCard && cardRect.contains(local) ? model.hovered : [PillElement.today, .compose, .settings, .move].first { elementRect($0).contains(local) }
-        activate(element)
+        activate(model.hasCard && cardRect.contains(local) ? model.hovered : element(at: local))
     }
 
     func activate(_ element: PillElement?) {

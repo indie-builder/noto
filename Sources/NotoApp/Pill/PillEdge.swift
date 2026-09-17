@@ -13,6 +13,11 @@ enum PillEdge: String, CaseIterable, Identifiable {
     }
     var isVertical: Bool { self == .left || self == .right }
 
+    /// 面板尺寸：along 沿边方向、across 垂直于边；水平边交换宽高。
+    func size(along: CGFloat, across: CGFloat) -> CGSize {
+        isVertical ? CGSize(width: across, height: along) : CGSize(width: along, height: across)
+    }
+
     /// 规范（右缘）空间 → 本边面板空间的映射；窗口宽高随边转置。
     func contentTransform(in size: CGSize) -> CGAffineTransform {
         switch self {

@@ -26,11 +26,10 @@ struct PillRootView: View {
                     }
                     shape.fill(.black).opacity(glassy ? 0 : 1)
                 }
-                .frame(width: model.edge.isVertical ? depth : length, height: model.edge.isVertical ? length : depth)
+                .frame(model.edge.size(along: length, across: depth))
                 .overlay(alignment: model.edge.contentAlignment) {
                     PillBarView(model: model)
-                        .frame(width: model.edge.isVertical ? PillMetrics.depth(for: model.edge) : PillMetrics.length(for: model.edge),
-                               height: model.edge.isVertical ? PillMetrics.length(for: model.edge) : PillMetrics.depth(for: model.edge))
+                        .frame(model.edge.size(along: PillMetrics.length(for: model.edge), across: PillMetrics.depth(for: model.edge)))
                         .opacity(model.expanded ? 1 : 0)
                 }
                 .clipShape(shape)
@@ -52,12 +51,12 @@ struct PillRootView: View {
                     let frame = PillController.cardFrame(edge: model.edge, element: element, height: model.cardHeight(for: element), panelSize: proxy.size)
                     let tailOffset = element.centerAlong(for: model.edge) - (model.edge.isVertical ? frame.midY : frame.midX)
                     PillCardView(model: model, element: element, tailOffset: tailOffset)
-                        .frame(width: frame.width, height: frame.height)
+                        .frame(frame.size)
                         .position(x: frame.midX, y: frame.midY)
                         .transition(.opacity)
                 }
             }
-            .frame(width: proxy.size.width, height: proxy.size.height)
+            .frame(proxy.size)
             .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.86), value: model.hovered)
             .animation(reduceMotion ? nil : PillController.spring, value: model.expanded)
         }
@@ -87,8 +86,7 @@ struct PillBarView: View {
                         Text(element == .today ? "\(model.summary.todayOpen)" : "新建")
                             .font(.system(size: element == .today ? 11.4 : 11, weight: .regular)).monospacedDigit()
                     }
-                    .frame(width: model.edge.isVertical ? PillMetrics.depth(for: model.edge) : 44,
-                           height: model.edge.isVertical ? PillMetrics.cell : PillMetrics.depth(for: model.edge), alignment: .top)
+                    .frame(model.edge.size(along: element.extent(for: model.edge), across: PillMetrics.depth(for: model.edge)), alignment: .top)
                 }.buttonStyle(.plain)
                     .accessibilityLabel(element == .today ? "到期待办，未完成 \(model.summary.todayOpen) 项" : "新建记录")
                     .offset(x: model.edge.isVertical ? 0 : element.originAlong(for: model.edge) - PillController.bodyStart,
@@ -110,12 +108,13 @@ private struct PillCardView: View {
     let tailOffset: CGFloat
     var body: some View {
         let shape = PillTooltipSilhouette(edge: model.edge, tailOffset: tailOffset)
+        // 12pt 内容边距 + 尾巴占据的那一侧再让出 28.2pt。
+        let insets = EdgeInsets(top: 12 + (model.edge == .top ? 28.2 : 0),
+                                leading: 12 + (model.edge == .left ? 28.2 : 0),
+                                bottom: 12 + (model.edge == .bottom ? 28.2 : 0),
+                                trailing: 12 + (model.edge == .right ? 28.2 : 0))
         VStack(alignment: .leading, spacing: 8) { content }
-            .padding(12)
-            .padding(.leading, model.edge == .left ? 28.2 : 0)
-            .padding(.trailing, model.edge == .right ? 28.2 : 0)
-            .padding(.top, model.edge == .top ? 28.2 : 0)
-            .padding(.bottom, model.edge == .bottom ? 28.2 : 0)
+            .padding(insets)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background {
                 if surface == "glass" && !reduceTransparency {
@@ -132,11 +131,7 @@ private struct PillCardView: View {
     private var content: some View {
         switch element {
         case .today:
-            HStack(spacing: 6) {
-                Image(systemName: "checklist").font(.system(size: 9.5, weight: .medium))
-                Text("到期待办").font(.system(size: 13.7, weight: .semibold))
-                Spacer(minLength: 0)
-            }.foregroundStyle(Color.primary.opacity(0.88))
+            header(icon: "checklist", title: "到期待办")
             if model.summary.todayOpen == 0 {
                 Text("暂无到期待办。")
                     .font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.55)).lineSpacing(3)
@@ -161,20 +156,28 @@ private struct PillCardView: View {
                 }
             }
             Spacer(minLength: 0)
-            Text("查看任务").font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.4))
+            footer("查看任务")
         case .compose:
-            HStack(spacing: 6) {
-                Image(systemName: "square.and.pencil").font(.system(size: 9.5, weight: .medium))
-                Text("新建记录").font(.system(size: 13.7, weight: .semibold))
-                Spacer(minLength: 0)
-            }.foregroundStyle(Color.primary.opacity(0.88))
+            header(icon: "square.and.pencil", title: "新建记录")
             Text("记下想法或任务。")
                 .font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.65)).lineSpacing(4)
             Spacer(minLength: 0)
-            Text("点击新建记录").font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.4))
+            footer("点击新建记录")
         case .settings, .move:
             EmptyView()
         }
+    }
+
+    private func header(icon: String, title: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon).font(.system(size: 9.5, weight: .medium))
+            Text(title).font(.system(size: 13.7, weight: .semibold))
+            Spacer(minLength: 0)
+        }.foregroundStyle(Color.primary.opacity(0.88))
+    }
+
+    private func footer(_ text: String) -> some View {
+        Text(text).font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.4))
     }
 }
 
