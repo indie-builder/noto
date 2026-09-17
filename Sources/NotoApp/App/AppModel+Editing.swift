@@ -60,7 +60,6 @@ extension AppModel {
     func remember(before: [Entry], after: [Entry], message: String) {
         undoBefore = before; undoAfter = after; undoAvailable = !after.isEmpty
         self.message = message; isError = false; convertedTaskID = nil; reload()
-        sync?.kick()
     }
     func save(todo: Bool = false) {
         guard let store else { return }
