@@ -59,7 +59,6 @@ PLIST
 cp THIRD-PARTY-NOTICES/codenotch.txt "$APP/Contents/Resources/Codenotch-LICENSE.txt"
 cp .build/checkouts/GRDB.swift/LICENSE "$APP/Contents/Resources/GRDB-LICENSE.txt"
 cp .build/checkouts/swift-argument-parser/LICENSE.txt "$APP/Contents/Resources/ArgumentParser-LICENSE.txt"
-cp .build/checkouts/powersync-swift/LICENSE "$APP/Contents/Resources/PowerSync-LICENSE.txt"
 # Sign from the inside out; the outer signature seals nested frameworks and Swift
 # compatibility libraries (including libswiftCompatibilitySpan when required).
 signing_args=(--force --sign "${SIGNING_IDENTITY:--}")
