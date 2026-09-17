@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-enum InputPurpose: String {
+enum InputPurpose {
     case newContent, chat, edit
     var focusNotification: Notification.Name {
         switch self { case .newContent: return .focusComposer; case .chat: return .focusChat; case .edit: return .focusEditor }
