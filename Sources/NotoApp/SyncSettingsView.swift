@@ -37,21 +37,9 @@ struct SyncSettingsView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text(controller.isSignedIn ? "返回本机后可更换同步服务。" : "填写部署方提供的服务地址与公开密钥，再登录账号。")
                             .font(NotoDesign.caption).foregroundStyle(.secondary)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Supabase 地址").font(NotoDesign.caption)
-                            TextField("https://…supabase.co", text: $server)
-                                .accessibilityLabel("Supabase 地址")
-                        }
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("公开密钥").font(NotoDesign.caption)
-                            TextField("Publishable / anon key", text: $publicKey)
-                                .accessibilityLabel("同步服务公开密钥")
-                        }
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("PowerSync 地址").font(NotoDesign.caption)
-                            TextField("https://…powersync.journeyapps.com", text: $syncServer)
-                                .accessibilityLabel("PowerSync 地址")
-                        }
+                        field("Supabase 地址", "https://…supabase.co", $server)
+                        field("公开密钥", "Publishable / anon key", $publicKey)
+                        field("PowerSync 地址", "https://…powersync.journeyapps.com", $syncServer)
                         Button { saveConfiguration() } label: {
                             Label("保存服务配置", systemImage: "checkmark")
                         }.buttonStyle(QuietButtonStyle(prominent: true))
@@ -163,6 +151,14 @@ struct SyncSettingsView: View {
 
     private func errorText(_ message: String) -> some View {
         ErrorLabel(text: message)
+    }
+
+    /// 带标题的单行输入；标签即无障碍名。
+    private func field(_ title: String, _ placeholder: String, _ text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(NotoDesign.caption)
+            TextField(placeholder, text: text).accessibilityLabel(title)
+        }
     }
 
     private func saveConfiguration() {

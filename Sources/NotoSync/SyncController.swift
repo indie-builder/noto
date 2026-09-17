@@ -123,7 +123,7 @@ public final class SyncController: ObservableObject {
             replica = nil // Later keychain/pointer failures must remain retryable.
             try await auth?.signOut()
             try Self.selectCLIStore(nil)
-            replica = nil; auth = nil; email = nil; store = localStore
+            auth = nil; email = nil; store = localStore
             conflicts = []; pendingCount = 0; lastError = ""; status = "已退出；账号离线数据保留在独立目录"
             NotoLog.sync.info("signed out")
         } catch {

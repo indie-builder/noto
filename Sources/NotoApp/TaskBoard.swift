@@ -169,7 +169,7 @@ struct FilterStatusRow: View {
         HStack {
             Text(model.dueOnly && dueOnlyTitle != nil ? dueOnlyTitle! : "\(model.visibleTasks.count) 条匹配任务")
                 .foregroundStyle(.secondary)
-            Button("清除筛选") { model.clearFilters() }
+            Button("清除筛选") { model.clearFilters() }.buttonStyle(QuietButtonStyle())
         }.font(NotoDesign.caption)
     }
 }

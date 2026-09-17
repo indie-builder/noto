@@ -92,9 +92,9 @@ final class PillController: NSObject {
         // 光标不会为了停在原地而产生事件，所以低频轮询兜底；全局监视器负责快速响应移动。
         // 数据不在这里轮询：AppModel 数据变化后主动推送（见 PillModel.refresh）。
         startPollTimer()
+        // 高频鼠标事件先在投递线程节流，再跳 MainActor，避免每帧多次 hop。
         let handler: (NSEvent) -> Void = { [weak self] event in
             guard let self else { return }
-            // 高频鼠标事件先在投递线程节流，再跳 MainActor，避免每帧多次 hop。
             self.monitorLock.lock()
             let skip = event.timestamp - self.lastCursorEventAt < 1.0 / 90.0
             if !skip { self.lastCursorEventAt = event.timestamp }
@@ -102,13 +102,9 @@ final class PillController: NSObject {
             guard !skip else { return }
             Task { @MainActor in self.cursorMoved() }
         }
-        if let global = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: handler) {
-            mouseMonitors.append(global)
-        }
-        if let local = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: { event in
-            handler(event)
-            return event
-        }) {
+        let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: handler) { mouseMonitors.append(global) }
+        if let local = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { event in handler(event); return event }) {
             mouseMonitors.append(local)
         }
         syncWithSettings()

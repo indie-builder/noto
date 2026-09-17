@@ -98,7 +98,8 @@ public final class AgentRunner: @unchecked Sendable {
         defer { try? outHandle.close(); try? errHandle.close() }
         let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
         let data = try encoder.encode(entries)
-        let conversation = try encoder.encode(history?.map { ["role": $0.role, "text": $0.text] } ?? [])
+        var transcript = (history ?? []).map { ["role": $0.role, "text": $0.text] }
+        let conversation = try encoder.encode(transcript)
         guard conversation.count + data.count + prompt.utf8.count < 500_000 else { throw NotoError("这段对话已超出当前上下文容量。历史已保存，请开启一段新对话。") }
         guard data.count < 250_000 else { throw NotoError("记录较多，请先搜索缩小范围后再交给 AI。") }
         let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd HH:mm EEEE"; formatter.locale = Locale(identifier: "zh_CN")
@@ -137,7 +138,6 @@ public final class AgentRunner: @unchecked Sendable {
             guard instruction.utf8.count < 180_000 else { throw NotoError("这段对话已超出 Kimi 当前命令的输入容量。历史已保存，请开启新对话。") }
             task.arguments = ["-p", instruction, "--output-format", "stream-json"]
         }
-        var transcript = (history ?? []).map { ["role": $0.role, "text": $0.text] }
         transcript.append(["role": "user", "text": prompt])
         try encoder.encode(transcript).write(to: workspace.appendingPathComponent("conversation.json"), options: .atomic)
         try data.write(to: workspace.appendingPathComponent("records.json"), options: .atomic)
@@ -203,12 +203,12 @@ public final class AgentRunner: @unchecked Sendable {
     }
 
     public static func decodeConversation(_ text: String) throws -> AIResponse {
-            let answer = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if let response = try? Self.decode(answer) { return response }
-            // A conversational CLI may answer in prose. It is safe to display, never to execute.
-            if !answer.isEmpty, answer.count <= 50_000, !answer.hasPrefix("{"), !answer.hasPrefix("```json") {
-                return AIResponse(message: answer, actions: [])
-            }
+        let answer = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let response = try? Self.decode(answer) { return response }
+        // A conversational CLI may answer in prose. It is safe to display, never to execute.
+        if !answer.isEmpty, answer.count <= 50_000, !answer.hasPrefix("{"), !answer.hasPrefix("```json") {
+            return AIResponse(message: answer, actions: [])
+        }
         return try Self.decode(text)
     }
 

@@ -193,9 +193,9 @@ extension Store {
         }
     }
 
+    /// Single-task convenience for the batch apply; both run one transaction per call.
     public func applyRemoteTask(id: String, document: String, revision: Int64, deleted: Bool) throws {
-        try db.write { try Self.applyRemote($0, id: id, document: document, revision: revision, deleted: deleted, acknowledging: false) }
-        if deleted, try entry(id: id) == nil { AgentWorkspace.remove(database: storageURL, conversationID: id) }
+        try applyRemoteTasks([(id: id, document: document, revision: revision, deleted: deleted)])
     }
 
     /// One transaction per downloaded batch, rather than a disk commit for every task.
