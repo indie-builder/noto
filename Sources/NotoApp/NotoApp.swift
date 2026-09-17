@@ -13,16 +13,10 @@ struct NotoApp: App {
     @StateObject private var model = AppModel()
     var body: some Scene {
         Window("noto", id: "main") {
-            Group {
-                if model.preview && CommandLine.arguments.contains("--preview-pill"), let pill = model.pill {
-                    PillPreviewView(model: pill.model)
-                } else { ContentView(model: model) }
-            }
+            ContentView(model: model)
                 .buttonStyle(QuietButtonStyle())
                 .frame(minWidth: 620, minHeight: 480)
                 .onAppear {
-                    let isolated = model.preview || ProcessInfo.processInfo.environment["NOTO_DATABASE"] != nil
-                    if isolated && CommandLine.arguments.contains("--dark") { NSApp.appearance = NSAppearance(named: .darkAqua) }
                     NSApp.setActivationPolicy(.regular); NSApp.activate(ignoringOtherApps: true)
                     DispatchQueue.main.async {
                         if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" }) ?? NSApp.keyWindow {
@@ -34,7 +28,6 @@ struct NotoApp: App {
                             window.isMovableByWindowBackground = model.mode == .notes
                             window.backgroundColor = .clear
                             window.isOpaque = false
-                            if isolated { window.setContentSize(CommandLine.arguments.contains("--compact") ? NSSize(width: 620, height: 700) : NSSize(width: 1340, height: 954)); window.center() }
                         }
                     }
                 }

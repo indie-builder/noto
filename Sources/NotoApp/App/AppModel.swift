@@ -73,11 +73,9 @@ final class AppModel: ObservableObject {
     @Published var undoAvailable = false
     @Published var provider: Provider { didSet { UserDefaults.standard.set(provider.rawValue, forKey: "provider") } }
     private(set) var store: Store?
-    private(set) var pill: PillController?
     @Published private(set) var sync: SyncController?
     @Published var lastDeletedTaskID: String?
     private var syncSubscriptions = Set<AnyCancellable>()
-    let preview: Bool
     private let persistsViewMode: Bool
     var undoBefore: [Entry] = []
     var undoAfter: [Entry] = []
@@ -119,32 +117,15 @@ final class AppModel: ObservableObject {
     }
 
     init(store injectedStore: Store? = nil) {
-        preview = injectedStore == nil && CommandLine.arguments.contains("--preview")
-        persistsViewMode = injectedStore == nil && !CommandLine.arguments.contains("--preview") && ProcessInfo.processInfo.environment["NOTO_DATABASE"] == nil
+        persistsViewMode = injectedStore == nil && ProcessInfo.processInfo.environment["NOTO_DATABASE"] == nil
         provider = Provider(rawValue: UserDefaults.standard.string(forKey: "provider") ?? "opencode") ?? .opencode
-        pill = PillController(appModel: self)
-        if injectedStore != nil || preview {
-            do {
-                store = try injectedStore ?? Store(url: preview ? nil : Store.defaultURL)
-                if preview {
-                    _ = try store?.add(kind: "todo", text: "整理草图", due: Self.dateKey(Calendar.current.date(byAdding: .day, value: 1, to: Date())!))
-                    _ = try store?.add(kind: "note", text: "今天想清楚了产品方向。")
-                    _ = try store?.add(kind: "todo", text: "梳理任务看板的交互细节", due: Self.dateKey(Date()), status: "in_progress", priority: "important")
-                    _ = try store?.add(kind: "todo", text: "完成第一轮设计讨论", due: Self.dateKey(Date()), status: "completed")
-                    draft = "记一下，今天想清楚了产品方向。明天下午把草图整理好。"
-                    message = "已记下，并添加了明天的任务。"
-                    undoAfter = try store?.list() ?? []; undoAvailable = true
-                }
-            } catch { store = nil; message = "无法打开数据：\(error.localizedDescription)"; isError = true }
+        if let injectedStore {
+            store = injectedStore
         }
-        if !preview && injectedStore == nil { try? AgentWorkspace.migrateLegacy() }
-        if !preview && injectedStore == nil { mode = ContentMode(rawValue: UserDefaults.standard.string(forKey: "contentMode") ?? "") ?? .notes }
-        if preview || ProcessInfo.processInfo.environment["NOTO_DATABASE"] != nil {
-            if CommandLine.arguments.contains("--calendar") { mode = .calendar }
-            if CommandLine.arguments.contains("--board") { mode = .board }
-        }
+        if injectedStore == nil { try? AgentWorkspace.migrateLegacy() }
+        if injectedStore == nil { mode = ContentMode(rawValue: UserDefaults.standard.string(forKey: "contentMode") ?? "") ?? .notes }
         if let store {
-            if !preview { attachSync(to: store) }
+            attachSync(to: store)
             reload()
         }
         else if !isError {
@@ -270,7 +251,6 @@ final class AppModel: ObservableObject {
                 if let tasks = result.2, tasks != self.tasks { self.tasks = tasks }
                 self.dataVersion = result.0
                 self.reloading = false
-                self.pill?.model.refresh()
                 if let id = self.taskToEditAfterReload {
                     self.taskToEditAfterReload = nil
                     if self.mode == .board, self.highlightedTaskID == id,

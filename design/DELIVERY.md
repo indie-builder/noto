@@ -28,7 +28,7 @@
 
 原始源码备份：`redesign/NotoApp.before.swift.txt`。历史 QA 不作为本次验证结果。
 
-交付文件：`../build/Noto.app`。完整证据与剩余限制见 `REDESIGN-QA.md`。
+交付文件：`../build/Noto.app`。
 
 
-后续交互更新（2026-09-09）已交付：见 [双击录入、AI 对话与原位编辑](DOUBLE-CLICK-QA.md)，旧常驻输入与快捷键以该规范替代。
+

@@ -6,13 +6,13 @@
 
 SwiftPM 多 target，依赖方向单向：`NotoCore ← NotoSync ← NotoApp`、`NotoCore ← NotoCLI`，无反向依赖。
 
-- **NotoCore**：数据模型（`Models.swift`）、SQLite 持久化与业务操作（`Store.swift`，搜索走 trigram FTS）、同步落库/outbox（`SyncStore.swift`）、AI CLI 调用（`Agent.swift`）、统一日志（`NotoLog.swift`）。不含 UI 与网络传输。
+- **NotoCore**：数据模型（`Models.swift`）、SQLite 持久化与业务操作（`Store` 按域拆为 Timeline / Conversation / Mutation 三个扩展，搜索走 trigram FTS）、同步落库/outbox（`SyncStore.swift`）、AI CLI 调用（`Agent.swift`）、统一日志（`NotoLog.swift`）。不含 UI 与网络传输。
 - **NotoSync**：同步传输层——Supabase 认证、PowerSync 副本、自适应轮询与冲突处理（登录态下有待传 2s / 空闲 15s / 失败指数退避）。落库都在 NotoCore，因此 CLI 不依赖本模块。
-- **NotoApp**：macOS 主应用，按目录分层——`App/`（AppModel 按域拆分 + `TextDrafts` 输入草稿，逐键文本不触发整树刷新）、`Views/`（主窗口三视图与行组件）、`Input/`（NSTextView 桥与搜索框）、`Design/`（设计令牌与玻璃材质）、`Pill/`（屏幕边缘药丸，事件驱动）。
+- **NotoApp**：macOS 主应用，按目录分层——`App/`（AppModel 按域拆分 + `TextDrafts` 输入草稿，逐键文本不触发整树刷新）、`Views/`（主窗口三视图与行组件）、`Input/`（NSTextView 桥与搜索框）、`Design/`（设计令牌与玻璃材质）。
 - **NotoCLI**：`noto` 命令（ArgumentParser），与 App 共享同一个 Store；账号库指针 `active-account.json` 的路径常量收口在 `Store.activeAccountPointer`，由 NotoSync 写入。
 - **backend/**：Supabase 迁移、PowerSync sync-rules、本地开发栈与契约测试。
 
-脚本统一在 `scripts/`（构建、打包、QA 验证）；设计规约与验收历史在 `design/`。日志统一走 `os.Logger`（subsystem `noto`，category `sync` / `agent`），UI 层不打日志，CLI 的 print 是 JSON 契约。
+脚本统一在 `scripts/`（构建、打包、QA 验证）；设计规约在 `design/`。日志统一走 `os.Logger`（subsystem `noto`，category `sync` / `agent`），UI 层不打日志，CLI 的 print 是 JSON 契约。
 
 ## AI 工作目录
 
@@ -20,47 +20,11 @@ SwiftPM 多 target，依赖方向单向：`NotoCore ← NotoSync ← NotoApp`、
 
 ## 项目设计规约
 
-[完整设计规约](design/DESIGN-SPEC.md) 是当前 macOS 界面的统一入口，覆盖全部页面、布局尺寸、字体与材质、图标、按钮、输入、动效、快捷键及验收要求。下方按日期保留历史方案，其中旧导航、设置结构及布局断点不作为当前规格。
-
-## PC 导航与动效（2026-09-13）
-
-[交互规范与验收](design/DESKTOP-MOTION.md)。导航整行可点击，包含图标外的留白；悬停、按压与选中状态有反馈。页面、侧栏、对话、编辑器、任务完成、日历和操作反馈采用统一的短过渡。键盘触发的自定义过渡即时完成，遵循系统减少动态效果设置；数据操作不等待动画。
-
-## PC 沉浸式液态玻璃（2026-09-13）
-
-[设计与检查记录](design/DESKTOP-IMMERSIVE.md)。主窗口改为连续的原生玻璃背景，移除侧栏、日历、对话与设置中的硬分隔线及卡片描边，使用留白和轻微明暗组织内容。新建记录浮层保持实底以保证输入可读。该调整仅作用于 macOS。
-
-## 整体 UI/UX 减法（2026-09-13）
-
-[设计与验收说明](design/SYSTEM-SIMPLIFICATION.md)。主窗口统一固定的新建、搜索和筛选入口；侧栏改为单色导航。看板在窄窗口使用状态切换，宽窗口保留三列；记录、看板、日历使用同一种完成按钮。设置合并为账号与同步、AI、外观三页，最近删除归入账号与同步。成功提示 5 秒后收起，错误保留。
-
-此前各节保留桌面端历史设计记录，界面行为以当前版本为准。
-
-## 实际屏幕边缘（2026-09-13 修订）
-
-普通启动和 `--preview` 都会创建独立贴边面板；`--preview-pill` 仍是单独的组件预览。收起态使用所选的液态玻璃或纯黑表面，悬停展开待办环和写一笔。两端是移动与设置弧线，悬停后才显示图标。关闭主窗口不会退出应用，可从边缘重新打开记录或设置。
-
-「设置 → 外观」可选择悬停展开或始终展开、四个边缘及通透/纯黑表面。⌥ 拖动沿边缘调整位置，各边独立保存；右键也可以切边或隐藏。玻璃表面按 Codenotch 的大面积采样再裁剪方式绘制，不叠加自制把手、底色和描边。按住移动弧线可拖向另一条屏幕边缘。
-
-构建并启动真实应用：`./scripts/build_and_run.sh`；隔离示例：`./scripts/build_and_run.sh --preview --compact`。Codex Run 按钮调用同一脚本。实际 NSPanel 验收记录见 [屏幕边缘验收](design/EDGE-RUNTIME-QA.md)；最新材质与轮廓对照见 [液态玻璃对照](design/GLASS-PARITY-QA.md)。
-
-## Codenotch 风格界面（2026-09-13）
-
-macOS 主界面统一为可收起的圆角玻璃侧栏，直接切换记录、看板和日历；日期导航置于侧栏，新建与设置固定在底部。记录按日分组，对话使用独立消息表面，日历与看板共用语义颜色。设置分为账号与同步、AI、外观和通用。
-
-药丸采用 Codenotch 的内凹贴边轮廓，支持通透与纯黑表面。新安装默认右侧，已有贴边偏好保留；外观设置可以重新居中。macOS 26 使用原生 Liquid Glass，旧系统使用系统材质；支持降低透明度和减少动态效果。修复了悬停返回仍收起、提示卡跨越间隙消失、图标与命中区域错位、无日期任务计入逾期、跨午夜数据未更新等问题。
-
-验收使用独立预览实例，不向个人资料写入示例。`--preview --compact --dark` 检查窄窗口深色布局；`--preview --compact --preview-pill` 检查生产药丸组件的四向展开与提示卡。报告见 [Codenotch 重做验收](design/CODENOTCH-REDESIGN-QA.md)。此前章节记录旧版行为，以本节与当前界面为准。
-
-## 端到端交互（2026-09-12）
-
-[完整交互规范](design/E2E-UX.md) · [界面与验收记录](design/e2e-2026-09-12/QA.md)。三种视图统一为「记录 / 看板 / 日历」，保留单图标切换与无顶栏设计。任意记录可从菜单「与 AI 讨论」开始原位对话；默认仅使用当前记录，可显式切换到当前视图已载入内容。保存小记旁的菜单可直接存为任务；新建成功后清除会隐藏新内容的筛选。
-
-设置与编辑菜单提供「最近删除」，重启后仍可恢复任务和该设备保存的对话。顶部的本机/账号入口说明当前资料空间。
+[完整设计规约](design/DESIGN-SPEC.md) 是当前 macOS 界面的统一入口，覆盖全部页面、布局尺寸、字体与材质、图标、按钮、输入、动效、快捷键及验收要求。[端到端交互规范](design/E2E-UX.md) 定义三种视图与对话、最近删除的行为契约。
 
 ## 桌面端任务同步
 
-桌面端保留 Supabase + PowerSync 任务同步，支持离线写入、账号隔离、冲突保留与任务删除恢复；记录和 AI 对话仍保存在当前设备。登录后可明确导入历史任务。配置与验证方式见 [桌面同步说明](design/DESKTOP-SYNC.md)。
+桌面端保留 Supabase + PowerSync 任务同步，支持离线写入、账号隔离、冲突保留与任务删除恢复；记录和 AI 对话仍保存在当前设备。登录后可明确导入历史任务。
 
 ## 下载与安装
 
@@ -102,26 +66,6 @@ build/bin/noto note convert-to-todo --id FULL_ID --json
 
 日历拖动仅改变日期，看板拖动仅改变状态；均使用拖动开始时的快照检查冲突，并支持撤销。CLI 与 AI 无需新接口：`todo update --id ID --due 2026-09-11` 将任务放到该日期，`--clear-due` 移到「未安排」。日期采用本地日历语义，不按 UTC 转换。
 
-最新轻量化交互见 [轻量化验收](design/LIGHTWEIGHT-QA.md)。此前月历验收与截图见 [任务月历验证](design/CALENDAR-QA.md)。看板验收记录见 [任务看板验证](design/TASK-BOARD-QA.md)。紧凑深色预览：`open -n build/Noto.app --args --preview --compact --dark`，预览使用内存示例数据。
-
-## 屏幕边缘的待办药丸
-
-macOS 版有一枚吸附在屏幕边缘的黑色凸舌：平时只是贴边的一小块，鼠标悬停即展开「今日待办」进度环、「写一笔」和设置入口，再悬停到具体元素会弹出带箭头的描述卡（今日到期与逾期、操作说明）。点击环在看板查看，点击「写一笔」唤起主窗口录入。药丸悬浮于所有窗口之上、不抢焦点，全屏应用在前台时自动收起。右键菜单可换边或隐藏；按住 ⌥ 拖动可沿边缘移动；设置中可开关与选择贴边（默认开、右侧）。交互规范与验收见 [待办药丸验收](design/PILL-QA.md)。贴边窗口机制改编自 [codenotch](https://github.com/vinzdg/codenotch)（MIT License，© vinzdg）。
-
-## 双击交互交付（2026-09-09）
-
-[交互规范与验收](design/DOUBLE-CLICK-QA.md)包含按需录入、AI、原位编辑的状态约定和原生截图。以下早期验收中的旧快捷键已由本次规范替代。
-
-## 全项目设计交付（2026-09-08）
-
-- [设计规范](design/DESIGN-SYSTEM.md)：页面、功能、视觉、组件、动效和状态契约。
-- [目标与交付清单](design/DELIVERY.md)：逐功能验收结果。
-- [本次验证报告与截图](design/REDESIGN-QA.md)：原生操作、真实 AI、测试日志及明确限制。
-
-回归检查：`python3 scripts/verify-cli.py`。长历史测试数据：`python3 scripts/seed-design-fixture.py /tmp/noto-new-fixture.sqlite`（拒绝覆盖已有数据库）。深色视觉检查：`open -n build/Noto.app --args --preview --dark`；只改变预览进程的外观，不修改系统设置。
-
-左侧默认显示短横杠与日期锚点，左上角按钮可展开为日期侧栏，并记住展开状态。日期按记录的本地创建日期分组，点击定位正文，滚动正文同步高亮。历史首次读取 40 条，接近列表末尾再加载下一批；搜索直接查询数据库中的全部历史。
-
 ## 本地 CLI 和 Skill
 
 ```sh
@@ -153,23 +97,13 @@ build/bin/noto doctor
 
 `noto ask '明天整理草图' --provider codex` 只生成建议；加 `--apply` 才写入。AI 工具已有此 Skill 时应直接调用数据命令，无需再嵌套调用 ask。
 
-## 验证与视觉稿
+## 验证
 
 ```sh
 swift test
-open build/Noto.app --args --preview
+python3 scripts/verify-cli.py
 ```
 
-`--preview` 使用内存示例数据，供视觉检查，不写入个人数据。正式启动为空数据或用户已保存的数据。所选视觉稿：`design/reference.png`。
+回归检查用 `verify-cli.py`；长历史测试数据用 `python3 scripts/seed-design-fixture.py /tmp/noto-new-fixture.sqlite`（拒绝覆盖已有数据库）。
 
 SwiftUI + AppKit / GRDB + SQLite / Swift Argument Parser。构建脚本生成本机 ad-hoc 签名的应用，不是已公证的公开发行包。
-
-## 早期本机验证（2026-09-08；旧输入规则已替代）
-
-- 单元测试：事务回滚、幂等创建、撤销冲突保护、共享数据库、JSON 解析通过。
-- CLI：创建、重试、查询、完成、过滤、导出通过。
-- 原生 GUI：回车记录、搜索快捷键、完成/撤销、设置单项选择通过。
-- OpenCode：原生窗口 ⌘ 回车 → 真实 CLI → SQLite → 界面待办完整闭环通过。
-- Kimi：stream-json 结构化返回通过。
-- Codex：本机 0.144.1 CLI 无法使用配置中的默认模型，服务端要求升级 CLI；未修改用户配置或切换其模型。
-- Claude Code：本机调用 150 秒超时，错误路径与输入保留正常；尚未完成成功调用验证。
