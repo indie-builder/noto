@@ -130,12 +130,48 @@ private struct TaskColumn: View {
     }
 }
 
+/// 任务卡与日历行共用的操作菜单：编辑、对话、状态、重要、删除。
+struct TaskActionMenu: View {
+    let entry: Entry
+    @ObservedObject var model: AppModel
+    var body: some View {
+        Menu {
+            Button("编辑任务") { model.beginEditing(entry) }
+            Button(entry.hasConversation ? "打开对话" : "与 AI 讨论") { model.openConversation(entry) }.disabled(model.busy)
+            ForEach(TodoStatus.allCases, id: \.self) { status in
+                Button { model.changeTask(entry, status: status.rawValue) } label: {
+                    if entry.status == status.rawValue { Label(status.label, systemImage: "checkmark") }
+                    else { Text(status.label) }
+                }
+            }
+            Button(entry.isImportant ? "取消重要" : "标记重要") {
+                model.changeTask(entry, priority: entry.isImportant ? "normal" : "important")
+            }
+            Divider()
+            Button("删除任务", role: .destructive) { model.deleteTask(entry) }.disabled(model.busy)
+        } label: { ActionIcon("ellipsis") }
+            .actionMenuStyle().help("任务操作").accessibilityLabel("任务操作")
+    }
+}
+
+/// 星标切换：重要时点亮，普通时置灰。
+struct ImportantTaskToggle: View {
+    let entry: Entry
+    @ObservedObject var model: AppModel
+    var body: some View {
+        Button { model.changeTask(entry, priority: entry.isImportant ? "normal" : "important") } label: {
+            ActionIcon(entry.isImportant ? "star.fill" : "star")
+                .foregroundStyle(entry.isImportant ? Color.accentColor : Color.secondary)
+        }.buttonStyle(QuietButtonStyle(icon: true))
+            .help(entry.isImportant ? "取消重要" : "标记重要")
+            .accessibilityLabel(entry.isImportant ? "取消重要" : "标记重要")
+    }
+}
+
 struct TaskCard: View {
     @State private var hovering = false
     let entry: Entry
     @ObservedObject var model: AppModel
-    private var important: Bool { entry.priority == "important" }
-    private var overdue: Bool { !entry.completed && (entry.due.map { $0 < AppModel.dateKey(Date()) } ?? false) }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 6) {
@@ -143,35 +179,18 @@ struct TaskCard: View {
                 TaskCardTitle(entry: entry) { model.beginEditing(entry) }.padding(.top, 4)
             }
             HStack(spacing: 4) {
-                if important {
-                Button { model.changeTask(entry, priority: important ? "normal" : "important") } label: {
-                    ActionIcon(important ? "star.fill" : "star")
-                        .foregroundStyle(important ? Color.accentColor : Color.secondary)
-                }.buttonStyle(QuietButtonStyle(icon: true)).help(important ? "取消重要" : "标记重要")
-                    .accessibilityLabel(important ? "取消重要" : "标记重要")
+                if entry.isImportant {
+                    ImportantTaskToggle(entry: entry, model: model)
                 }
                 if let due = entry.due {
                     Text(TaskDates.taskLabel(due, completed: entry.completed))
-                        .font(.system(size: 11)).foregroundStyle(overdue ? Color.orange : Color.secondary)
+                        .font(.system(size: 11)).foregroundStyle(entry.isOverdue ? Color.orange : Color.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if entry.hasConversation { ConversationShortcut(entry: entry, model: model, compact: true) }
                 Spacer(minLength: 0)
                 if !entry.hasConversation { ConversationShortcut(entry: entry, model: model, revealed: hovering) }
-                Menu {
-                    Button("编辑任务") { model.beginEditing(entry) }
-                    Button(entry.hasConversation ? "打开对话" : "与 AI 讨论") { model.openConversation(entry) }.disabled(model.busy)
-                    ForEach(TodoStatus.allCases, id: \.self) { status in
-                        Button { model.changeTask(entry, status: status.rawValue) } label: {
-                            if entry.status == status.rawValue { Label(status.label, systemImage: "checkmark") }
-                            else { Text(status.label) }
-                        }
-                    }
-                    Button(important ? "取消重要" : "标记重要") { model.changeTask(entry, priority: important ? "normal" : "important") }
-                    Divider()
-                    Button("删除任务", role: .destructive) { model.deleteTask(entry) }.disabled(model.busy)
-                } label: { ActionIcon("ellipsis") }
-                    .actionMenuStyle().help("任务操作").accessibilityLabel("任务操作")
+                TaskActionMenu(entry: entry, model: model)
             }.padding(.leading, 34)
         }
         .padding(12)
@@ -179,109 +198,5 @@ struct TaskCard: View {
         .contentShape(Rectangle())
         .onTapGesture { model.beginEditing(entry) }
         .onHover { hovering = $0 }
-    }
-}
-
-struct TaskEditor: View {
-    @State private var confirmClose = false
-    @ObservedObject var model: AppModel
-    @ObservedObject var drafts: TextDrafts
-    private var creating: Bool { model.taskCreating }
-    private var text: Binding<String> { creating ? $drafts.task : $drafts.edit }
-    private var status: Binding<String> { creating ? $model.taskDraftStatus : $model.editStatus }
-    private var important: Binding<Bool> { creating ? $model.taskDraftImportant : $model.editImportant }
-    private var hasDue: Binding<Bool> { creating ? $model.taskDraftHasDue : $model.editHasDue }
-    private var date: Binding<Date> { creating ? $model.taskDraftDate : $model.editDate }
-    private func save() { if creating { model.saveNewTask() } else { model.saveEditing() } }
-    private func cancel() {
-        if !creating && model.editDirty { confirmClose = true }
-        else { model.taskCreating = false; model.cancelEditing() }
-    }
-    private var attributesLabel: String {
-        let state = TodoStatus(rawValue: status.wrappedValue)?.label ?? "待开始"
-        return status.wrappedValue == "pending" ? (important.wrappedValue ? "重要" : "更多") : state
-    }
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text(creating ? (model.taskDraftRestored ? "继续草稿" : "新建任务") : "编辑任务")
-                    .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
-                Spacer()
-                Button(action: cancel) { ActionIcon("xmark") }
-                    .buttonStyle(QuietButtonStyle(icon: true))
-                    .help(creating ? "收起，保留草稿（Esc）" : "取消编辑（Esc）")
-                    .accessibilityLabel(creating ? "收起新建任务，保留草稿" : "取消编辑")
-            }
-            Composer(text: text, enabled: true, purpose: .edit, onSubmit: save, onCancel: cancel, placeholder: "想做什么？")
-                .frame(minHeight: 48).fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 18).padding(.bottom, 22)
-            if !model.editError.isEmpty {
-                Label(model.editError, systemImage: "exclamationmark.circle")
-                    .font(NotoDesign.caption).foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true).padding(.bottom, 12)
-            }
-            HStack(spacing: 4) {
-                TaskDateControl(hasDue: hasDue, date: date)
-                Menu {
-                    Toggle("重要任务", isOn: important)
-                    Divider()
-                    Picker("状态", selection: status) {
-                        ForEach(TodoStatus.allCases, id: \.self) { Text($0.label).tag($0.rawValue) }
-                    }.pickerStyle(.inline)
-                } label: {
-                    Label(attributesLabel, systemImage: important.wrappedValue ? "star.fill" : "ellipsis")
-                        .font(.system(size: 12)).padding(.horizontal, 8).frame(height: 28)
-                        .foregroundStyle(important.wrappedValue ? Color.accentColor : Color.secondary)
-                }.actionMenuStyle().accessibilityLabel("任务属性")
-                    .accessibilityValue("\(TodoStatus(rawValue: status.wrappedValue)?.label ?? "待开始")，\(important.wrappedValue ? "重要" : "普通")")
-                    .help("设置重要标记和任务状态")
-                Spacer(minLength: 12)
-                Button(creating ? "创建" : "保存", action: save)
-                    .buttonStyle(QuietButtonStyle(prominent: true)).help("⌘↵ 保存；回车换行")
-                    .disabled(text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-        }
-        .padding(24).frame(width: 440)
-        .background(NotoGlassSurface(radius: 20))
-        .interactiveDismissDisabled(model.editDirty || (creating && model.taskDraftDirty))
-        .onExitCommand(perform: cancel)
-        .alert("保存任务修改？", isPresented: $confirmClose) {
-            Button("保存") { save() }.disabled(text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            Button("放弃修改", role: .destructive) { model.cancelEditing() }
-            Button("继续编辑", role: .cancel) { }
-        } message: { Text("关闭前可以保存修改，或继续编辑。") }
-    }
-}
-
-/// One optional date entry, shared by task creation and editing.
-struct TaskDateControl: View {
-    @Binding var hasDue: Bool
-    @Binding var date: Date
-    @State private var open = false
-    @State private var choosing = false
-    @State private var selectedDate = Date()
-    private var label: String {
-        guard hasDue else { return "日期" }
-        return TaskDates.monthDayFormat(date)
-    }
-    private func choose(_ value: Date) { date = value; hasDue = true; open = false }
-    var body: some View {
-        Button { choosing = false; selectedDate = date; open.toggle() } label: {
-            Label(label, systemImage: "calendar")
-        }.buttonStyle(QuietButtonStyle()).help(hasDue ? "修改或清除截止日期" : "设置截止日期")
-            .accessibilityLabel(hasDue ? "截止日期 \(AppModel.dateKey(date))" : "设置截止日期")
-            .popover(isPresented: $open, arrowEdge: .bottom) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Button("今天") { choose(Date()) }
-                    Button("明天") { choose(TaskDates.local.date(byAdding: .day, value: 1, to: Date())!) }
-                    Button("选择日期…") { choosing = true }
-                    if choosing {
-                        DatePicker("截止日期", selection: $selectedDate, displayedComponents: .date).datePickerStyle(.graphical)
-                        Button("确定") { choose(selectedDate) }
-                    }
-                    Color.clear.frame(height: 6)
-                    Button("清除日期") { hasDue = false; open = false }.disabled(!hasDue)
-                }.buttonStyle(QuietButtonStyle()).padding(12)
-            }
     }
 }

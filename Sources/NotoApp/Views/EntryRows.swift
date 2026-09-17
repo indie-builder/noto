@@ -60,8 +60,6 @@ struct EntryRow: View {
     @State private var hovering = false
     let entry: Entry
     @ObservedObject var model: AppModel
-    private var overdue: Bool { !entry.completed && (entry.due.map { $0 < AppModel.dateKey(Date()) } ?? false) }
-    var dueLabel: String { entry.due.map { TaskDates.taskLabel($0, completed: entry.completed) } ?? "" }
     private func edit() { model.beginEditing(entry) }
     var body: some View {
         Group {
@@ -73,11 +71,11 @@ struct EntryRow: View {
                 EntryBodyText(text: entry.text, completed: entry.completed, onEdit: edit)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 4)
                     .help(entry.createdAt.formatted(date: .abbreviated, time: .shortened))
-                if entry.due != nil || entry.status == "in_progress" || entry.priority == "important" || entry.hasConversation {
+                if entry.due != nil || entry.status == "in_progress" || entry.isImportant || entry.hasConversation {
                     HStack(spacing: 8) {
-                        if entry.priority == "important" { Image(systemName: "star.fill").foregroundStyle(.secondary).accessibilityLabel("重要任务") }
+                        if entry.isImportant { Image(systemName: "star.fill").foregroundStyle(.secondary).accessibilityLabel("重要任务") }
                         if entry.status == "in_progress" { Text("进行中") }
-                        if entry.due != nil { Text(dueLabel).foregroundStyle(overdue ? Color.orange : Color.secondary) }
+                        if entry.due != nil { Text(entry.dueLabel).foregroundStyle(entry.isOverdue ? Color.orange : Color.secondary) }
                         if entry.hasConversation { ConversationShortcut(entry: entry, model: model, compact: true) }
                     }.font(.system(size: 11)).foregroundStyle(.secondary)
                 }
@@ -103,7 +101,7 @@ struct EntryRow: View {
                 ForEach(TodoStatus.allCases, id: \.self) { status in
                     Button(status.label) { model.changeTask(entry, status: status.rawValue) }
                 }
-                Button(entry.priority == "important" ? "取消重要" : "标记重要") { model.changeTask(entry, priority: entry.priority == "important" ? "normal" : "important") }
+                Button(entry.isImportant ? "取消重要" : "标记重要") { model.changeTask(entry, priority: entry.isImportant ? "normal" : "important") }
                 Button("删除任务", role: .destructive) { model.deleteTask(entry) }.disabled(model.busy)
             }
             Button("复制") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(entry.text, forType: .string) }
@@ -163,22 +161,22 @@ struct InlineEditView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(entry.kind == "todo" ? "编辑任务" : "编辑记录").font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
-            Composer(text: $drafts.edit, enabled: true, purpose: .edit, onSubmit: { model.saveEditing() }, onCancel: close)
+            Composer(text: $drafts.edit, purpose: .edit, onSubmit: { model.saveEditing() }, onCancel: close)
                 .frame(minHeight: 64)
             if entry.kind == "todo" {
                 HStack {
-                    Picker("状态", selection: $model.editStatus) {
+                    Picker("状态", selection: $model.edit.status) {
                         ForEach(TodoStatus.allCases, id: \.self) { Text($0.label).tag($0.rawValue) }
                     }
-                    Button { model.editImportant.toggle() } label: {
-                        ActionIcon(model.editImportant ? "star.fill" : "star")
+                    Button { model.edit.important.toggle() } label: {
+                        ActionIcon(model.edit.important ? "star.fill" : "star")
                     }.buttonStyle(QuietButtonStyle(icon: true)).help("切换重要标记").accessibilityLabel("重要任务")
-                        .accessibilityValue(model.editImportant ? "已开启" : "已关闭")
+                        .accessibilityValue(model.edit.important ? "已开启" : "已关闭")
                 }.font(NotoDesign.caption)
-                TaskDateControl(hasDue: $model.editHasDue, date: $model.editDate)
+                TaskDateControl(hasDue: $model.edit.hasDue, date: $model.edit.date)
             }
-            if !model.editError.isEmpty {
-                Label(model.editError, systemImage: "exclamationmark.circle").font(NotoDesign.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+            if !model.edit.error.isEmpty {
+                Label(model.edit.error, systemImage: "exclamationmark.circle").font(NotoDesign.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
             }
             HStack {
                 Spacer(minLength: 0)
@@ -189,11 +187,9 @@ struct InlineEditView: View {
         }.padding(16)
             .background(NotoDesign.field, in: RoundedRectangle(cornerRadius: NotoDesign.radius))
             .onExitCommand(perform: close)
-            .alert("保存记录修改？", isPresented: $confirmClose) {
-                Button("保存") { model.saveEditing() }.disabled(drafts.edit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                Button("放弃修改", role: .destructive) { model.cancelEditing() }
-                Button("继续编辑", role: .cancel) { }
-            } message: { Text("关闭前可以保存修改，或继续编辑。") }
+            .unsavedChangesAlert(isPresented: $confirmClose, title: "保存记录修改？",
+                                 canSave: !drafts.edit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                                 save: { model.saveEditing() }, discard: { model.cancelEditing() })
     }
 }
 

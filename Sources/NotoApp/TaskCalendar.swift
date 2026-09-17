@@ -11,6 +11,13 @@ enum ContentMode: String, CaseIterable, Identifiable {
     var shortcut: KeyEquivalent { switch self { case .notes: "1"; case .board: "2"; case .calendar: "3" } }
 }
 
+// 任务行的共用判定与文案：看板卡、日历行、时间线行保持一致。
+extension Entry {
+    var isImportant: Bool { priority == "important" }
+    var isOverdue: Bool { !completed && (due.map { $0 < AppModel.dateKey(Date()) } ?? false) }
+    var dueLabel: String { due.map { TaskDates.taskLabel($0, completed: completed) } ?? "" }
+}
+
 struct ImportantTaskFilter: View {
     @ObservedObject var model: AppModel
     var body: some View {
@@ -22,51 +29,6 @@ struct ImportantTaskFilter: View {
             }.buttonStyle(QuietButtonStyle(icon: true)).help(model.importantOnly ? "显示全部任务" : "只看重要任务")
                 .accessibilityLabel("只看重要任务").accessibilityValue(model.importantOnly ? "已开启" : "已关闭")
         }
-    }
-}
-
-/// Calendar arithmetic, never UTC parsing or fixed 24-hour intervals for date-only tasks.
-enum TaskDates {
-    static let local: Calendar = { var calendar = Calendar(identifier: .gregorian); calendar.timeZone = .current; calendar.firstWeekday = 2; return calendar }()
-    // body 求值路径上的 formatter 必须缓存：DateFormatter 创建是毫秒级开销，且这些方法按行调用。
-    private static let monthDayFormatter: DateFormatter = { let formatter = DateFormatter(); formatter.calendar = local; formatter.dateFormat = "M月d日"; return formatter }()
-    private static let fullDateFormatter: DateFormatter = { let formatter = DateFormatter(); formatter.calendar = local; formatter.dateFormat = "yyyy年M月d日"; return formatter }()
-    private static let monthFormatter: DateFormatter = { let formatter = DateFormatter(); formatter.calendar = local; formatter.dateFormat = "yyyy年M月"; return formatter }()
-    private static let weekdayFormatter: DateFormatter = { let formatter = DateFormatter(); formatter.calendar = local; formatter.locale = Locale(identifier: "zh_CN"); formatter.dateFormat = "EEEE"; return formatter }()
-    static func taskLabel(_ key: String, completed: Bool = false, today: Date = Date()) -> String {
-        guard let value = date(key) else { return key }
-        let formatter = local.isDate(value, equalTo: today, toGranularity: .year) ? monthDayFormatter : fullDateFormatter
-        if completed { return formatter.string(from: value) }
-        if local.isDate(value, inSameDayAs: today) { return "今天" }
-        if let tomorrow = local.date(byAdding: .day, value: 1, to: today), local.isDate(value, inSameDayAs: tomorrow) { return "明天" }
-        return value < local.startOfDay(for: today) ? "已逾期 · " + formatter.string(from: value) : formatter.string(from: value)
-    }
-    @MainActor static func dayHeading(_ date: Date) -> String {
-        taskLabel(AppModel.dateKey(date), completed: date < local.startOfDay(for: Date())) + " · " + weekdayFormatter.string(from: date)
-    }
-    static func monthLabel(_ date: Date) -> String { monthFormatter.string(from: date) }
-    static func monthDayFormat(_ date: Date) -> String { monthDayFormatter.string(from: date) }
-    static func date(_ key: String, calendar: Calendar = local) -> Date? {
-        let parts = key.split(separator: "-").compactMap { Int($0) }
-        guard key.count == 10, parts.count == 3,
-              let date = calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2], hour: 12)),
-              calendar.component(.year, from: date) == parts[0], calendar.component(.month, from: date) == parts[1], calendar.component(.day, from: date) == parts[2] else { return nil }
-        return date
-    }
-    static func monthStart(_ date: Date, calendar: Calendar = local) -> Date {
-        var parts = calendar.dateComponents([.year, .month], from: date); parts.day = 1; parts.hour = 12
-        return calendar.date(from: parts)!
-    }
-    static func grid(_ date: Date, calendar: Calendar = local) -> [Date] {
-        let first = monthStart(date, calendar: calendar)
-        let offset = (calendar.component(.weekday, from: first) + 5) % 7
-        let start = calendar.date(byAdding: .day, value: -offset, to: first)!
-        return (0..<42).map { calendar.date(byAdding: .day, value: $0, to: start)! }
-    }
-    static func movingMonth(_ offset: Int, from date: Date, calendar: Calendar = local) -> Date {
-        let target = calendar.date(byAdding: .month, value: offset, to: monthStart(date, calendar: calendar))!
-        let day = min(calendar.component(.day, from: date), calendar.range(of: .day, in: .month, for: target)!.count)
-        return calendar.date(byAdding: .day, value: day - 1, to: target)!
     }
 }
 
@@ -83,11 +45,11 @@ struct TaskCalendar: View {
                 HStack(spacing: 4) {
                     Text(searching ? "搜索任务" : monthLabel).font(.system(size: 18, weight: .semibold))
                         .contentTransition(.opacity).animation(NotoMotion.animation(.navigation), value: monthLabel)
-                    if !searching {
-                        iconButton("chevron.left", "上个月") { model.moveCalendarMonth(-1) }
-                        iconButton("chevron.right", "下个月") { model.moveCalendarMonth(1) }
-                        iconButton("location", "回到今天") { model.selectCalendarDate(Date()) }
-                    }
+                if !searching {
+                    QuietIconButton("chevron.left", help: "上个月") { model.moveCalendarMonth(-1) }
+                    QuietIconButton("chevron.right", help: "下个月") { model.moveCalendarMonth(1) }
+                    QuietIconButton("location", help: "回到今天") { model.selectCalendarDate(Date()) }
+                }
                     Spacer(minLength: 0)
                     ImportantTaskFilter(model: model)
                     TaskDropArea(onDrop: { model.rescheduleTask($0, due: nil) }) {
@@ -164,10 +126,6 @@ struct TaskCalendar: View {
                 model.quickCreateTask(date: searching || model.calendarUnscheduled ? nil : model.selectedCalendarDate)
             }, onOutsideClick: {}))
     }
-    private func iconButton(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { ActionIcon(icon) }
-            .buttonStyle(QuietButtonStyle(icon: true)).help(label).accessibilityLabel(label)
-    }
     private var monthGrid: some View {
         let groups = model.calendarGroups
         return VStack(spacing: 4) {
@@ -231,29 +189,16 @@ private struct CalendarTaskRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 TaskCardTitle(entry: entry, lines: 2) { model.beginEditing(entry) }.padding(.top, 4)
                 HStack(spacing: 8) {
-                    if showsDate { Text(entry.due.map { TaskDates.taskLabel($0, completed: entry.completed) } ?? "未安排").font(.system(size: 11)).foregroundStyle(.secondary) }
+                    if showsDate { Text(entry.dueLabel.isEmpty ? "未安排" : entry.dueLabel).font(.system(size: 11)).foregroundStyle(.secondary) }
                     if entry.hasConversation { ConversationShortcut(entry: entry, model: model, compact: true) }
                 }
             }
-            if entry.priority == "important" {
-                Button { model.changeTask(entry, priority: "normal") } label: { ActionIcon("star.fill") }
-                    .buttonStyle(QuietButtonStyle(icon: true)).foregroundStyle(.secondary).help("取消重要").accessibilityLabel("取消重要")
+            if entry.isImportant {
+                ImportantTaskToggle(entry: entry, model: model).foregroundStyle(.secondary)
             }
             if !entry.hasConversation { ConversationShortcut(entry: entry, model: model, revealed: hovering) }
-            Menu {
-                Button("编辑任务") { model.beginEditing(entry) }
-                Button(entry.hasConversation ? "打开对话" : "与 AI 讨论") { model.openConversation(entry) }.disabled(model.busy)
-                ForEach(TodoStatus.allCases, id: \.self) { status in
-                    Button(status.label) { model.changeTask(entry, status: status.rawValue) }
-                }
-                Button(entry.priority == "important" ? "取消重要" : "标记重要") {
-                    model.changeTask(entry, priority: entry.priority == "important" ? "normal" : "important")
-                }
-                Divider()
-                Button("删除任务", role: .destructive) { model.deleteTask(entry) }.disabled(model.busy)
-            } label: { ActionIcon("ellipsis") }
-                .actionMenuStyle()
-                .foregroundStyle(hovering ? .primary : .secondary).help("任务操作").accessibilityLabel("任务操作")
+            TaskActionMenu(entry: entry, model: model)
+                .foregroundStyle(hovering ? .primary : .secondary)
         }
         .padding(.vertical, 7).padding(.horizontal, 4)
         .background(hovering ? Color.primary.opacity(0.025) : .clear, in: RoundedRectangle(cornerRadius: 6))

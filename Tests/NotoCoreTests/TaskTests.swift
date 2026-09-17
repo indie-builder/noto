@@ -4,7 +4,7 @@ import GRDB
 
 final class TaskTests: XCTestCase {
     func testMigrationFromV4() throws {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".sqlite")
+        let url = tempStoreURL()
         defer { try? FileManager.default.removeItem(at: url) }
         let legacy = try DatabaseQueue(path: url.path)
         try legacy.write { db in

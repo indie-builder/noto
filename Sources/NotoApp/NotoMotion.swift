@@ -41,22 +41,3 @@ enum NotoMotion {
         withAnimation(animation(story), changes)
     }
 }
-
-/// Keep the hit rectangle fixed while the label responds to a press.
-struct NavigationButtonStyle: ButtonStyle {
-    var minHeight: CGFloat = 40
-    @State private var hovered = false
-    @Environment(\.isEnabled) private var enabled
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.985 : 1)
-            .animation(NotoMotion.animation(.feedback), value: configuration.isPressed)
-            .frame(maxWidth: .infinity, minHeight: minHeight)
-            .background(enabled ? Color.primary.opacity(configuration.isPressed ? 0.10 : hovered ? 0.055 : 0) : .clear,
-                        in: RoundedRectangle(cornerRadius: 7))
-            .contentShape(Rectangle())
-            .onHover { hovered = $0 }
-            .animation(NotoMotion.hover, value: hovered)
-            .opacity(enabled ? 1 : 0.4)
-    }
-}

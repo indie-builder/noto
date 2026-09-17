@@ -43,24 +43,24 @@ struct NotoApp: App {
         .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("新建内容") { model.showComposer() }.keyboardShortcut("n").disabled(model.settings || model.recentlyDeleted)
-                Button("提交当前输入") { model.submitFocusedInput() }.keyboardShortcut(.return, modifiers: .command).disabled(model.settings || model.recentlyDeleted)
+                Button("新建内容") { model.showComposer() }.keyboardShortcut("n").disabled(model.chromeLocked)
+                Button("提交当前输入") { model.submitFocusedInput() }.keyboardShortcut(.return, modifiers: .command).disabled(model.chromeLocked)
                 Button("保存为任务") { model.save(todo: true) }.keyboardShortcut(.return, modifiers: [.command, .shift])
-                    .disabled(model.composerPosition == nil || model.settings || model.recentlyDeleted)
+                    .disabled(model.composerPosition == nil || model.chromeLocked)
             }
             CommandGroup(replacing: .undoRedo) {
                 Button("撤销文本编辑") { NSApp.sendAction(Selector(("undo:")), to: nil, from: nil) }.keyboardShortcut("z")
                 Button("重做文本编辑") { NSApp.sendAction(Selector(("redo:")), to: nil, from: nil) }.keyboardShortcut("z", modifiers: [.command, .option])
-                Button("撤销上次记录操作") { model.undo() }.keyboardShortcut("z", modifiers: [.command, .shift]).disabled(!model.undoAvailable || model.settings || model.recentlyDeleted)
-                Button("恢复上次删除的任务") { model.restoreLastDeletedTask() }.disabled(model.lastDeletedTaskID == nil || model.settings || model.recentlyDeleted)
-                Button("最近删除…") { model.recentlyDeleted = true }.disabled(model.settings || model.recentlyDeleted)
+                Button("撤销上次记录操作") { model.undo() }.keyboardShortcut("z", modifiers: [.command, .shift]).disabled(!model.undoAvailable || model.chromeLocked)
+                Button("恢复上次删除的任务") { model.restoreLastDeletedTask() }.disabled(model.lastDeletedTaskID == nil || model.chromeLocked)
+                Button("最近删除…") { model.recentlyDeleted = true }.disabled(model.chromeLocked)
             }
             CommandGroup(after: .toolbar) {
                 Button(sidebarExpanded ? "隐藏侧栏" : "显示侧栏") { sidebarExpanded.toggle() }
                     .keyboardShortcut("s", modifiers: [.command, .control])
-                    .disabled(model.settings || model.recentlyDeleted)
+                    .disabled(model.chromeLocked)
                 ForEach(ContentMode.allCases) { mode in
-                    Button("显示\(mode.label)") { model.switchMode(mode) }.keyboardShortcut(mode.shortcut, modifiers: .command).disabled(model.settings || model.recentlyDeleted)
+                    Button("显示\(mode.label)") { model.switchMode(mode) }.keyboardShortcut(mode.shortcut, modifiers: .command).disabled(model.chromeLocked)
                 }
             }
             CommandGroup(after: .textEditing) {
@@ -69,7 +69,7 @@ struct NotoApp: App {
                     model.composerPosition = nil
                     model.closeConversation()
                     DispatchQueue.main.async { NotificationCenter.default.post(name: .focusSearch, object: nil) }
-                }.keyboardShortcut("k").disabled(model.settings || model.recentlyDeleted)
+                }.keyboardShortcut("k").disabled(model.chromeLocked)
             }
             CommandGroup(replacing: .appSettings) {
                 Button("设置…") { model.settings = true }.keyboardShortcut(",")

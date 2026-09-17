@@ -35,7 +35,7 @@ final class StoreTests: XCTestCase {
     }
 
     func testConversationPersistsSearchesAndCommitsAtomically() throws {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".sqlite")
+        let url = tempStoreURL()
         defer { try? FileManager.default.removeItem(at: url) }
         let store = try Store(url: url)
         let note = try store.startConversation("怎样整理想法？")
@@ -105,7 +105,7 @@ final class StoreTests: XCTestCase {
         XCTAssertTrue(try AgentRunner.decodeConversation("自然语言回复").actions.isEmpty)
         XCTAssertThrowsError(try AgentRunner.decodeConversation("{\"actions\":broken}"))
         XCTAssertThrowsError(try AgentRunner.decodeConversation(""))
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let dir = tempDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
         let url = dir.appendingPathComponent("test.sqlite")
         let gui = try Store(url: url), cli = try Store(url: url)
@@ -135,7 +135,7 @@ final class StoreTests: XCTestCase {
     }
 
     func testAIWorkspaceMigrationAndDeletionLeaveDatabaseRecoverable() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let root = tempDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
         let legacy = root.appendingPathComponent("legacy/scope/conversation")
         let cache = root.appendingPathComponent("cache/scope/conversation")
@@ -162,7 +162,7 @@ final class StoreTests: XCTestCase {
     }
 
     func testAIWorkspaceIsStableIsolatedAndUsedByEveryProvider() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let root = tempDirectory()
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         let database = root.appendingPathComponent("local.sqlite")
@@ -210,7 +210,7 @@ final class StoreTests: XCTestCase {
     }
 
     func testAgentCancellationStopsCLIThatIgnoresTerminate() async throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let directory = tempDirectory()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let executable = directory.appendingPathComponent("fake-cli")
@@ -232,7 +232,7 @@ final class StoreTests: XCTestCase {
     }
 
     func testDesktopLockWaitIsBoundedAndDoesNotLoseData() throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let directory = tempDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appendingPathComponent("notes.sqlite")
         let store = try Store(url: url, busyTimeout: 0.1)
@@ -250,7 +250,7 @@ final class StoreTests: XCTestCase {
     }
 
     func testPooledReadersKeepExternalChangeDetectionStable() throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let directory = tempDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appendingPathComponent("notes.sqlite")
         let store = try Store(url: url), external = try Store(url: url)

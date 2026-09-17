@@ -3,13 +3,12 @@ import NotoCore
 
 // 记录编辑与基础动作：行内编辑、新建录入、保存、撤销。
 extension AppModel {
-    var editDue: String? { editHasDue ? Self.dateKey(editDate) : nil }
-    var editDirty: Bool { editing.map { editDraft != $0.text || editDue != $0.due || ($0.kind == "todo" && (editStatus != $0.status || editImportant != ($0.priority == "important"))) } ?? false }
+    var editDue: String? { edit.hasDue ? Self.dateKey(edit.date) : nil }
     @discardableResult
     func leaveUnchangedEditor() -> Bool {
         guard !editDirty && !(taskCreating && taskDraftDirty) else {
-            editError = "请先保存或取消当前编辑。"
-            message = editError; isError = true
+            edit.error = "请先保存或取消当前编辑。"
+            message = edit.error; isError = true
             return false
         }
         editing = nil; taskCreating = false
@@ -29,10 +28,9 @@ extension AppModel {
         }
         guard leaveUnchangedEditor() else { return }
         composerPosition = nil
-        editStatus = entry.status ?? "pending"; editImportant = entry.priority == "important"
-        editing = entry; editDraft = entry.text; editError = ""; editHasDue = entry.due != nil
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.calendar = Calendar(identifier: .gregorian); f.dateFormat = "yyyy-MM-dd"
-        editDate = entry.due.flatMap { f.date(from: $0) } ?? Date()
+        edit = EditState(status: entry.status ?? "pending", important: entry.priority == "important",
+                         hasDue: entry.due != nil, date: entry.due.flatMap { TaskDates.date($0) } ?? Date())
+        editing = entry; editDraft = entry.text; edit.error = ""
     }
     func saveEditing() {
         guard let editing, !editDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
@@ -40,14 +38,14 @@ extension AppModel {
             do {
                 guard let store else { throw NotoError("无法打开本地数据。") }
                 let changed = try store.updateTodo(id: editing.id, text: editDraft, due: editDue, clearDue: editDue == nil,
-                                                   status: editStatus, priority: editImportant ? "important" : "normal", expected: editing)
+                                                   status: edit.status, priority: edit.important ? "important" : "normal", expected: editing)
                 remember(before: [editing], after: [changed], message: "已更新任务。")
                 if conversation?.id == changed.id { conversation = changed }
                 self.editing = nil
-            } catch { editError = error.localizedDescription }
+            } catch { edit.error = error.localizedDescription }
         } else { update(editing, text: editDraft, due: editDue) }
     }
-    func cancelEditing() { editing = nil; editError = "" }
+    func cancelEditing() { editing = nil; edit.error = "" }
     func setSearch(_ value: String) {
         guard leaveUnchangedEditor() else { return }
         search = value
@@ -68,21 +66,16 @@ extension AppModel {
         guard let store else { return }
         var content = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else { return }
-        let isTodo = todo || content.hasPrefix("/todo ") || content.hasPrefix("待办：")
-        if content.hasPrefix("/todo ") { content = String(content.dropFirst(6)) }
-        if content.hasPrefix("待办：") { content = String(content.dropFirst(3)) }
+        var isTodo = todo
+        for prefix in ["/todo ", "待办："] where content.hasPrefix(prefix) {
+            content = String(content.dropFirst(prefix.count))
+            isTodo = true
+        }
         do {
             let entry = try store.add(kind: isTodo ? "todo" : "note", text: content)
             draft = ""; composerPosition = nil
             if !search.isEmpty { search = "" }
             remember(before: [], after: [entry], message: isTodo ? "已添加任务。" : "已记下。")
-        } catch { fail(error) }
-    }
-    func toggle(_ entry: Entry) {
-        guard let store else { return }
-        do {
-            let changed = try store.setCompleted(id: entry.id, completed: !entry.completed, expected: entry)
-            remember(before: [entry], after: [changed], message: changed.completed ? "完成了一件事。" : "已重新打开。")
         } catch { fail(error) }
     }
     func update(_ entry: Entry, text: String, due: String?) {
@@ -92,7 +85,7 @@ extension AppModel {
             remember(before: [entry], after: [changed], message: "已更新。")
             if conversation?.id == changed.id { conversation = changed }
             editing = nil
-        } catch { editError = error.localizedDescription }
+        } catch { edit.error = error.localizedDescription }
     }
     func undo() {
         guard undoAvailable else { return }

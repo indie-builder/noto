@@ -95,7 +95,7 @@ public final class SyncController: ObservableObject {
             while !Task.isCancelled {
                 await self?.syncNow()
                 // 有待传或初次下载中保持高频；空闲降频；失败指数退避。
-                let wait = await self?.pollInterval() ?? Self.idleInterval
+                let wait = self?.pollInterval() ?? Self.idleInterval
                 do { try await Task.sleep(for: wait) } catch { return }
             }
         }
@@ -228,15 +228,11 @@ public final class SyncController: ObservableObject {
         let base: Any = try mutation.baseDocument.map { try JSONSerialization.jsonObject(with: Data($0.utf8)) } ?? NSNull()
         let body: [String: Any] = ["p_mutation_id": mutation.mutationID, "p_task_id": mutation.entryID,
                                   "p_operation": mutation.operation, "p_document": document, "p_base_document": base]
-        let url = configuration.supabaseURL.appendingPathComponent("rest/v1/rpc/noto_apply_mutation")
-        var request = URLRequest(url: url); request.httpMethod = "POST"; request.timeoutInterval = 30
-        request.setValue(configuration.publishableKey, forHTTPHeaderField: "apikey")
-        request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw NotoError("上传未完成（HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)），修改仍在本机队列。")
+        let url = try SyncHTTP.endpoint(configuration.supabaseURL, "rest/v1/rpc/noto_apply_mutation")
+        let (data, status) = try await SyncHTTP.post(url, apiKey: configuration.publishableKey, token: token,
+                                                     json: try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys]))
+        guard (200..<300).contains(status) else {
+            throw NotoError("上传未完成（HTTP \(status)），修改仍在本机队列。")
         }
         guard let value = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let document = value["document"] as? [String: Any], let revision = value["revision"] as? NSNumber,
