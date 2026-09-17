@@ -95,7 +95,7 @@ public final class SyncController: ObservableObject {
             while !Task.isCancelled {
                 await self?.syncNow()
                 // 有待传或初次下载中保持高频；空闲降频；失败指数退避。
-                let wait = await self?.pollInterval() ?? Self.idleInterval
+                let wait = self?.pollInterval() ?? Self.idleInterval
                 do { try await Task.sleep(for: wait) } catch { return }
             }
         }
