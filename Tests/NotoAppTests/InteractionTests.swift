@@ -35,17 +35,17 @@ final class InteractionTests: XCTestCase {
         XCTAssertEqual(try store.list().count, 1)
         model.sendChat()
         XCTAssertFalse(model.busy)
-        model.chatDraft = "未发送的问题"
+        model.drafts.chat = "未发送的问题"
         model.closeConversation()
         model.openQuickConversation()
-        XCTAssertEqual(model.chatDraft, "未发送的问题")
+        XCTAssertEqual(model.drafts.chat, "未发送的问题")
         model.openConversation(entry)
         model.openQuickConversation()
         XCTAssertEqual(model.conversation?.id, entry.id)
         XCTAssertFalse(model.newConversationOpen)
         model.closeConversation()
         model.openQuickConversation()
-        XCTAssertEqual(model.chatDraft, "未发送的问题")
+        XCTAssertEqual(model.drafts.chat, "未发送的问题")
         XCTAssertFalse(model.canChangeSyncAccount())
         XCTAssertEqual(try store.list().count, 1)
     }
@@ -105,20 +105,20 @@ final class InteractionTests: XCTestCase {
         XCTAssertEqual(model.taskDraftState.status, "in_progress")
         XCTAssertFalse(model.taskDraftState.hasDue)
         XCTAssertTrue(model.taskDraftState.important)
-        model.taskDraft = "继续处理"
+        model.drafts.task = "继续处理"
         model.taskCreating = false
         let date = try XCTUnwrap(TaskDates.date("2026-12-31"))
         model.quickCreateTask(status: "completed", date: date)
         XCTAssertEqual(model.taskDraftState.status, "in_progress")
         XCTAssertFalse(model.taskDraftState.hasDue)
-        XCTAssertEqual(model.taskDraft, "继续处理")
+        XCTAssertEqual(model.drafts.task, "继续处理")
         model.saveNewTask()
         await model.waitForReload()
         model.switchMode(.calendar)
         model.quickCreateTask(date: date)
         XCTAssertEqual(AppModel.dateKey(model.taskDraftState.date), "2026-12-31")
         XCTAssertTrue(model.taskDraftState.hasDue)
-        model.taskDraft = "当天任务"
+        model.drafts.task = "当天任务"
         model.saveNewTask()
         await model.waitForReload()
         XCTAssertEqual(try store.todos(status: "all").first { $0.text == "当天任务" }?.due, "2026-12-31")
@@ -132,19 +132,19 @@ final class InteractionTests: XCTestCase {
 
     @MainActor func testNewContentIsVisibleAfterSavingFromSearchAndImportantFilter() async throws {
         let model = try await makeModel()
-        model.setSearch("不会匹配"); model.showComposer(); model.draft = "新的小记"; model.save()
+        model.setSearch("不会匹配"); model.showComposer(); model.drafts.composer = "新的小记"; model.save()
         await model.waitForReload()
         XCTAssertTrue(model.search.isEmpty)
         XCTAssertEqual(model.entries.first?.text, "新的小记")
         model.switchMode(.board); model.setSearch("不会匹配"); model.setImportantOnly(true)
-        model.showNewTask(); model.taskDraft = "普通任务"; model.saveNewTask()
+        model.showNewTask(); model.drafts.task = "普通任务"; model.saveNewTask()
         await model.waitForReload()
         XCTAssertTrue(model.search.isEmpty)
         XCTAssertFalse(model.importantOnly)
         XCTAssertEqual(model.visibleTasks.first?.text, "普通任务")
-        model.switchMode(.notes); model.showComposer(); model.draft = "被浮层遮住的草稿"
+        model.switchMode(.notes); model.showComposer(); model.drafts.composer = "被浮层遮住的草稿"
         model.recentlyDeleted = true; model.submitFocusedInput()
-        XCTAssertEqual(model.draft, "被浮层遮住的草稿")
+        XCTAssertEqual(model.drafts.composer, "被浮层遮住的草稿")
     }
 
     @MainActor func testDiscussionUsesExplicitRecordContextWithoutDuplicatingTheNote() async throws {
@@ -164,12 +164,12 @@ final class InteractionTests: XCTestCase {
         XCTAssertTrue(try store.messages(for: note.id).isEmpty)
         model.aiUsesCurrentView = true
         XCTAssertEqual(Set(model.aiContext.map(\.id)), Set([note.id, task.id]))
-        model.chatDraft = "保留这个问题"; model.closeConversation()
+        model.drafts.chat = "保留这个问题"; model.closeConversation()
         model.openConversation(task)
         XCTAssertFalse(model.aiUsesCurrentView)
         XCTAssertEqual(model.aiContext.map(\.id), [task.id])
         model.openConversation(note)
-        XCTAssertEqual(model.chatDraft, "保留这个问题")
+        XCTAssertEqual(model.drafts.chat, "保留这个问题")
         model.aiUsesCurrentView = true
         model.replaceAccountStore(try Store(url: nil))
         XCTAssertFalse(model.aiUsesCurrentView)
@@ -179,13 +179,13 @@ final class InteractionTests: XCTestCase {
     @MainActor func testNoteSubmissionSavesLocallyWhileAIIsBusy() async throws {
         let store = try Store(url: nil)
         let model = try await makeModel(store)
-        model.showComposer(); model.draft = "先记下来"; model.busy = true
+        model.showComposer(); model.drafts.composer = "先记下来"; model.busy = true
         model.submitFocusedInput()
         let entry = try XCTUnwrap(store.list().first)
         XCTAssertEqual(entry.text, "先记下来")
         XCTAssertEqual(entry.kind, "note")
         XCTAssertFalse(entry.hasConversation)
-        XCTAssertTrue(model.draft.isEmpty)
+        XCTAssertTrue(model.drafts.composer.isEmpty)
     }
 
     @MainActor func testMarkedTextCannotSubmit() async {
@@ -206,25 +206,25 @@ final class InteractionTests: XCTestCase {
         let model = AppModel(store: store)
         await model.waitForReload()
         XCTAssertNil(model.composerPosition)
-        model.showComposer(at: CGPoint(x: 90, y: 120)); model.draft = "未发送的草稿"
+        model.showComposer(at: CGPoint(x: 90, y: 120)); model.drafts.composer = "未发送的草稿"
         model.composerPosition = nil
         model.showComposer(at: CGPoint(x: 300, y: 240))
-        XCTAssertEqual(model.draft, "未发送的草稿")
-        model.beginEditing(first); model.editDraft = "修改后的文字"
+        XCTAssertEqual(model.drafts.composer, "未发送的草稿")
+        model.beginEditing(first); model.drafts.edit = "修改后的文字"
         model.showComposer(); model.beginEditing(other); model.setSearch("其他")
         await model.waitForReload()
         XCTAssertEqual(model.editing?.id, first.id)
-        XCTAssertEqual(model.editDraft, "修改后的文字")
+        XCTAssertEqual(model.drafts.edit, "修改后的文字")
         XCTAssertNil(model.composerPosition)
         XCTAssertTrue(model.search.isEmpty)
         XCTAssertFalse(model.edit.error.isEmpty)
         model.cancelEditing(); model.showComposer(); model.save()
         XCTAssertNil(model.composerPosition)
-        XCTAssertTrue(model.draft.isEmpty)
+        XCTAssertTrue(model.drafts.composer.isEmpty)
         XCTAssertEqual(try store.list().filter { $0.text == "未发送的草稿" }.count, 1)
-        model.busy = true; model.showComposer(); model.draft = "AI 运行时的草稿"
+        model.busy = true; model.showComposer(); model.drafts.composer = "AI 运行时的草稿"
         model.ask()
-        XCTAssertEqual(model.draft, "AI 运行时的草稿")
+        XCTAssertEqual(model.drafts.composer, "AI 运行时的草稿")
         XCTAssertNotNil(model.composerPosition)
         XCTAssertNil(model.conversation)
     }
@@ -237,7 +237,7 @@ final class InteractionTests: XCTestCase {
         let history = try store.messages(for: entry.id)
         let model = AppModel(store: store)
         await model.waitForReload()
-        model.beginEditing(entry); model.editDraft = "仅改列表文字"; model.saveEditing()
+        model.beginEditing(entry); model.drafts.edit = "仅改列表文字"; model.saveEditing()
         await model.waitForReload()
         let changed = try XCTUnwrap(store.list().first)
         XCTAssertEqual(changed.id, entry.id)
@@ -248,12 +248,12 @@ final class InteractionTests: XCTestCase {
         await model.waitForReload()
         XCTAssertEqual(try store.list().first?.text, entry.text)
         let current = try XCTUnwrap(store.list().first)
-        model.beginEditing(current); model.editDraft = "本地编辑中的草稿"
+        model.beginEditing(current); model.drafts.edit = "本地编辑中的草稿"
         _ = try store.update(id: entry.id, text: "来自其他进程", due: nil)
         model.saveEditing()
         await model.waitForReload()
         XCTAssertEqual(try store.list().first?.text, "来自其他进程")
-        XCTAssertEqual(model.editDraft, "本地编辑中的草稿")
+        XCTAssertEqual(model.drafts.edit, "本地编辑中的草稿")
         XCTAssertNotNil(model.editing)
         XCTAssertFalse(model.edit.error.isEmpty)
     }
@@ -264,11 +264,11 @@ final class InteractionTests: XCTestCase {
         let completed = try store.setCompleted(id: todo.id, completed: true)
         let model = AppModel(store: store)
         await model.waitForReload()
-        model.beginEditing(completed); model.editDraft = " \n "; model.saveEditing()
+        model.beginEditing(completed); model.drafts.edit = " \n "; model.saveEditing()
         await model.waitForReload()
         XCTAssertNotNil(model.editing)
         XCTAssertEqual(try store.list().first?.text, "待办")
-        model.editDraft = "已编辑待办"; model.saveEditing()
+        model.drafts.edit = "已编辑待办"; model.saveEditing()
         await model.waitForReload()
         let result = try XCTUnwrap(store.list().first)
         XCTAssertEqual(result.kind, completed.kind)
@@ -284,7 +284,7 @@ final class InteractionTests: XCTestCase {
         model.setSearch("转为"); model.switchMode(.board)
         await model.waitForReload()
         XCTAssertTrue(model.search.isEmpty)
-        model.showNewTask(status: "in_progress"); model.taskDraft = "重要任务"; model.taskDraftState.important = true
+        model.showNewTask(status: "in_progress"); model.drafts.task = "重要任务"; model.taskDraftState.important = true
         model.switchMode(.notes)
         await model.waitForReload()
         XCTAssertEqual(model.mode, .board); XCTAssertTrue(model.taskCreating)
@@ -334,11 +334,11 @@ final class InteractionTests: XCTestCase {
         await model.waitForReload()
         XCTAssertEqual(model.tasks.first { $0.id == task.id }?.status, "in_progress")
         model.beginEditing(try XCTUnwrap(model.tasks.first { $0.id == task.id }))
-        model.editDraft = "本地未保存"
+        model.drafts.edit = "本地未保存"
         _ = try cli.updateTodo(id: task.id, text: "CLI 已修改")
         model.refreshIfChanged(); model.saveEditing()
         await model.waitForReload()
-        XCTAssertEqual(model.editDraft, "本地未保存"); XCTAssertNotNil(model.editing)
+        XCTAssertEqual(model.drafts.edit, "本地未保存"); XCTAssertNotNil(model.editing)
         XCTAssertEqual(model.tasks.first { $0.id == task.id }?.text, "CLI 已修改")
     }
 

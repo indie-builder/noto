@@ -63,7 +63,7 @@ final class CalendarTests: XCTestCase {
         model.showComposer()
         XCTAssertTrue(model.taskCreating); XCTAssertTrue(model.taskDraftState.hasDue)
         XCTAssertEqual(AppModel.dateKey(model.taskDraftState.date), "2026-12-31")
-        model.taskDraft = "保留草稿"; model.taskDraftState.important = true
+        model.drafts.task = "保留草稿"; model.taskDraftState.important = true
         model.switchMode(.notes)
         await model.waitForReload()
         XCTAssertEqual(model.mode, .calendar)
@@ -77,7 +77,7 @@ final class CalendarTests: XCTestCase {
         XCTAssertEqual(model.tasks.first?.due, "2026-12-31")
         model.showUnscheduled(); model.showNewTask()
         XCTAssertFalse(model.taskDraftState.hasDue)
-        model.taskDraft = "无需日期"; model.saveNewTask()
+        model.drafts.task = "无需日期"; model.saveNewTask()
         await model.waitForReload()
         XCTAssertNil(model.tasks.first { $0.text == "无需日期" }?.due)
     }

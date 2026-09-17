@@ -8,20 +8,20 @@ final class SyncInteractionTests: XCTestCase {
         let note = try store.startConversation("Saved conversation")
         let model = AppModel(store: store)
         await model.waitForReload()
-        model.draft = "Unsent note"
+        model.drafts.composer = "Unsent note"
         XCTAssertFalse(model.canChangeSyncAccount())
-        XCTAssertEqual(model.draft, "Unsent note")
-        model.draft = ""
-        model.openConversation(note); model.chatDraft = "Unsent question"
+        XCTAssertEqual(model.drafts.composer, "Unsent note")
+        model.drafts.composer = ""
+        model.openConversation(note); model.drafts.chat = "Unsent question"
         model.closeConversation()
         XCTAssertFalse(model.canChangeSyncAccount())
-        model.openConversation(note); model.chatDraft = ""; model.closeConversation()
-        model.beginEditing(note); model.editDraft = "Unsaved edit"
+        model.openConversation(note); model.drafts.chat = ""; model.closeConversation()
+        model.beginEditing(note); model.drafts.edit = "Unsaved edit"
         XCTAssertFalse(model.canChangeSyncAccount())
         model.cancelEditing()
-        model.showNewTask(); model.taskDraft = "Hidden task draft"; model.taskCreating = false
+        model.showNewTask(); model.drafts.task = "Hidden task draft"; model.taskCreating = false
         XCTAssertFalse(model.canChangeSyncAccount())
-        model.taskDraft = ""; model.taskDraftState.hasDue = false
+        model.drafts.task = ""; model.taskDraftState.hasDue = false
         XCTAssertTrue(model.canChangeSyncAccount())
     }
 

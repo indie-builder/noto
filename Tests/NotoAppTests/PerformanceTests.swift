@@ -28,7 +28,7 @@ final class PerformanceTests: XCTestCase {
         XCTAssertEqual(model.calendarGroups[""]?.first, second)
         XCTAssertEqual(model.taskColumns["pending"]?.first, first)
         XCTAssertEqual(model.groups.flatMap(\.entries), [first])
-        model.draft = "输入不应改变数据分组"
+        model.drafts.composer = "输入不应改变数据分组"
         XCTAssertEqual(model.calendarTasks.count, 2)
         model.importantOnly = true
         XCTAssertEqual(model.visibleTasks, [first])

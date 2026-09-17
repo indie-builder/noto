@@ -36,14 +36,14 @@ struct EditState {
 
 @MainActor
 final class AppModel: ObservableObject {
-    @Published var entries: [Entry] = [] { didSet { cachedGroups = nil } }
-    @Published var tasks: [Entry] = [] { didSet { invalidateTaskViews() } }
+    @Published var entries: [Entry] = [] { didSet { invalidateDerivedViews() } }
+    @Published var tasks: [Entry] = [] { didSet { invalidateDerivedViews() } }
     @Published var mode: ContentMode = .notes { didSet { if persistsViewMode { UserDefaults.standard.set(mode.rawValue, forKey: "contentMode") } } }
     @Published var selectedCalendarDate = Date()
     @Published var calendarUnscheduled = false
     @Published var taskDraftState = TaskDraftState()
-    @Published var dueOnly = false { didSet { invalidateTaskViews() } }
-    @Published var importantOnly = false { didSet { invalidateTaskViews() } }
+    @Published var dueOnly = false { didSet { invalidateDerivedViews() } }
+    @Published var importantOnly = false { didSet { invalidateDerivedViews() } }
     @Published var completedLimit = 20
     @Published var taskCreating = false
     @Published var edit = EditState()
@@ -66,7 +66,7 @@ final class AppModel: ObservableObject {
     @Published var conversation: Entry?
     @Published var messages: [ChatMessage] = []
     @Published var chatError = ""
-    @Published var editing: Entry? { didSet { cachedGroups = nil } }
+    @Published var editing: Entry? { didSet { invalidateDerivedViews() } }
     @Published var settings = false
     @Published var recentlyDeleted = false
     @Published var aiUsesCurrentView = false
@@ -92,28 +92,12 @@ final class AppModel: ObservableObject {
     @Published private(set) var reloading = false
     private let pageSize = 40
     var chatDrafts: [String: String] = [:]
-    /// 逐键变化的输入文本在这里（见 TextDrafts）；draft/chatDraft/taskDraft/editDraft 保持既有 API。
+    /// 逐键变化的输入文本只住在这里（TextDrafts）；保存、清空、恢复都直接读写它。
     let drafts = TextDrafts()
-    var draft: String {
-        get { drafts.composer }
-        set { drafts.composer = newValue }
-    }
-    var chatDraft: String {
-        get { drafts.chat }
-        set { drafts.chat = newValue }
-    }
-    var taskDraft: String {
-        get { drafts.task }
-        set { drafts.task = newValue }
-    }
-    var editDraft: String {
-        get { drafts.edit }
-        set { drafts.edit = newValue }
-    }
-    var taskDraftDirty: Bool { taskDraftState.dirty(text: taskDraft) }
+    var taskDraftDirty: Bool { taskDraftState.dirty(text: drafts.task) }
     var editDirty: Bool {
         guard let entry = editing else { return false }
-        if editDraft != entry.text || editDue != entry.due { return true }
+        if drafts.edit != entry.text || editDue != entry.due { return true }
         return entry.kind == "todo" && (edit.status != entry.status || edit.important != (entry.priority == "important"))
     }
 
@@ -121,11 +105,11 @@ final class AppModel: ObservableObject {
         persistsViewMode = injectedStore == nil && ProcessInfo.processInfo.environment["NOTO_DATABASE"] == nil
         provider = Provider(rawValue: UserDefaults.standard.string(forKey: "provider") ?? "opencode") ?? .opencode
         pill = PillController(appModel: self)
-        if let injectedStore {
-            store = injectedStore
+        store = injectedStore
+        if injectedStore == nil {
+            try? AgentWorkspace.migrateLegacy()
+            mode = ContentMode(rawValue: UserDefaults.standard.string(forKey: "contentMode") ?? "") ?? .notes
         }
-        if injectedStore == nil { try? AgentWorkspace.migrateLegacy() }
-        if injectedStore == nil { mode = ContentMode(rawValue: UserDefaults.standard.string(forKey: "contentMode") ?? "") ?? .notes }
         if let store {
             attachSync(to: store)
             reload()
@@ -175,9 +159,9 @@ final class AppModel: ObservableObject {
 
     /// 切换账号前拒绝一切未落库的草稿；编辑器脏态交给 leaveUnchangedEditor 处理。
     func canChangeSyncAccount() -> Bool {
-        let hasDraft = !draft.isEmpty || !chatDraft.isEmpty || !newConversationDraft.isEmpty
-            || chatDrafts.contains { $0.key != conversation?.id && !$0.value.isEmpty }
-            || taskDraftState.dirty(text: taskDraft)
+        let hasDraft = !drafts.composer.isBlank || !drafts.chat.isBlank || !newConversationDraft.isBlank
+            || chatDrafts.contains { $0.key != conversation?.id && !$0.value.isBlank }
+            || taskDraftState.dirty(text: drafts.task)
         guard !busy, !hasDraft else {
             fail(NotoError(busy ? "请先停止 AI 回复，再切换账号。" : "还有未保存的内容或对话草稿。请先保存、发送或清空草稿，再切换账号。"))
             return false
@@ -194,7 +178,7 @@ final class AppModel: ObservableObject {
         entries = []; tasks = []; messages = []; conversation = nil; chatDrafts = [:]; newConversationOpen = false; newConversationDraft = ""
         aiUsesCurrentView = false
         undoBefore = []; undoAfter = []; undoAvailable = false; lastDeletedTaskID = nil
-        editing = nil; editDraft = ""; edit = EditState(); draft = ""; chatDraft = ""; chatError = ""
+        editing = nil; drafts.edit = ""; edit = EditState(); drafts.composer = ""; drafts.chat = ""; chatError = ""
         taskCreating = false; taskDraftState.reset(); dueOnly = false
         convertedTaskID = nil; highlightedTaskID = nil; taskToEditAfterReload = nil
         composerPosition = nil; readingRequested = true; message = ""; isError = false
@@ -207,17 +191,16 @@ final class AppModel: ObservableObject {
         return String(format: "%04d-%02d-%02d", parts.year!, parts.month!, parts.day!)
     }
 
-    // 派生视图缓存；失效逻辑与分组在 AppModel+Groups。
-    var cachedGroups: [DayGroup]?
-    var groupsTimeZone = TimeZone.current
-    var cachedVisibleTasks: [Entry]?
-    var cachedCalendarTasks: [Entry]?
-    var cachedCalendarGroups: [String: [Entry]]?
-    var cachedTaskColumns: [String: [Entry]]?
-    func invalidateTaskViews() {
-        cachedVisibleTasks = nil; cachedCalendarTasks = nil
-        cachedCalendarGroups = nil; cachedTaskColumns = nil
+    // 派生视图的统一缓存：memo 按名字取/存，输入（entries/tasks/筛选/编辑器）一变整体失效。
+    private var derivedCache: [String: Any] = [:]
+    func memo<T>(_ key: String, _ make: () -> T) -> T {
+        if let value = derivedCache[key] as? T { return value }
+        let value = make()
+        derivedCache[key] = value
+        return value
     }
+    func invalidateDerivedViews() { derivedCache.removeAll() }
+    var groupsTimeZone = TimeZone.current
 
     func fail(_ error: Error) { message = error.localizedDescription; isError = true }
 

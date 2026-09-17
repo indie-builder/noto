@@ -35,57 +35,49 @@ extension AppModel {
     }
 
     var groups: [DayGroup] {
-        if groupsTimeZone != .current { cachedGroups = nil; groupsTimeZone = .current }
-        if let cachedGroups { return cachedGroups }
-        var result: [DayGroup] = []
-        var visible = entries
-        // Keep an active editor reachable if an external change removes its search match.
-        if let editing, !visible.contains(where: { $0.id == editing.id }) {
-            visible.append(editing)
-            visible.sort { $0.createdAt == $1.createdAt ? $0.id < $1.id : $0.createdAt > $1.createdAt }
+        if groupsTimeZone != .current { invalidateDerivedViews(); groupsTimeZone = .current }
+        return memo("groups") {
+            var result: [DayGroup] = []
+            var visible = entries
+            // Keep an active editor reachable if an external change removes its search match.
+            if let editing, !visible.contains(where: { $0.id == editing.id }) {
+                visible.append(editing)
+                visible.sort { $0.createdAt == $1.createdAt ? $0.id < $1.id : $0.createdAt > $1.createdAt }
+            }
+            for entry in visible {
+                let key = Self.dateKey(entry.createdAt)
+                if result.last?.id == key { result[result.count - 1].entries.append(entry) }
+                else { result.append(DayGroup(id: key, date: entry.createdAt, entries: [entry])) }
+            }
+            return result
         }
-        for entry in visible {
-            let key = Self.dateKey(entry.createdAt)
-            if result.last?.id == key { result[result.count - 1].entries.append(entry) }
-            else { result.append(DayGroup(id: key, date: entry.createdAt, entries: [entry])) }
-        }
-        cachedGroups = result
-        return result
     }
 
     var visibleTasks: [Entry] {
-        if let cachedVisibleTasks { return cachedVisibleTasks }
-        let result = tasks.filter {
-            (!importantOnly || $0.priority == "important") &&
-            (!dueOnly || (!$0.completed && ($0.due.map { $0 <= Self.dateKey(Date()) } ?? false)))
+        memo("visibleTasks") {
+            tasks.filter {
+                (!importantOnly || $0.priority == "important") &&
+                (!dueOnly || (!$0.completed && ($0.due.map { $0 <= Self.dateKey(Date()) } ?? false)))
+            }
         }
-        cachedVisibleTasks = result
-        return result
     }
 
     var taskColumns: [String: [Entry]] {
-        if let cachedTaskColumns { return cachedTaskColumns }
-        let result = Dictionary(grouping: visibleTasks, by: { $0.status ?? "pending" })
-        cachedTaskColumns = result
-        return result
+        memo("taskColumns") { Dictionary(grouping: visibleTasks, by: { $0.status ?? "pending" }) }
     }
 
     var calendarTasks: [Entry] {
-        if let cachedCalendarTasks { return cachedCalendarTasks }
-        let result = visibleTasks.sorted {
-            if $0.completed != $1.completed { return !$0.completed }
-            if $0.priority != $1.priority { return $0.priority == "important" }
-            return $0.createdAt == $1.createdAt ? $0.id < $1.id : $0.createdAt > $1.createdAt
+        memo("calendarTasks") {
+            visibleTasks.sorted {
+                if $0.completed != $1.completed { return !$0.completed }
+                if $0.priority != $1.priority { return $0.priority == "important" }
+                return $0.createdAt == $1.createdAt ? $0.id < $1.id : $0.createdAt > $1.createdAt
+            }
         }
-        cachedCalendarTasks = result
-        return result
     }
 
     var calendarGroups: [String: [Entry]] {
-        if let cachedCalendarGroups { return cachedCalendarGroups }
-        let result = Dictionary(grouping: calendarTasks, by: { $0.due ?? "" })
-        cachedCalendarGroups = result
-        return result
+        memo("calendarGroups") { Dictionary(grouping: calendarTasks, by: { $0.due ?? "" }) }
     }
 
     var calendarDetailTasks: [Entry] { calendarGroups[calendarUnscheduled ? "" : Self.dateKey(selectedCalendarDate)] ?? [] }

@@ -11,14 +11,14 @@ struct TaskDraftAttributes: Equatable {
 extension AppModel {
     func deleteTask(_ entry: Entry) {
         guard !busy, leaveUnchangedEditor(), let store else { return }
-        let unsentQuestion = conversation?.id == entry.id ? chatDraft : chatDrafts[entry.id] ?? ""
+        let unsentQuestion = conversation?.id == entry.id ? drafts.chat : chatDrafts[entry.id] ?? ""
         if !unsentQuestion.isEmpty {
             fail(NotoError("请先发送或清空这条任务的对话草稿。")); return
         }
         do {
             try store.deleteTodo(id: entry.id, expected: entry)
             lastDeletedTaskID = entry.id
-            if conversation?.id == entry.id { conversation = nil; messages = []; chatDraft = ""; readingRequested = true }
+            if conversation?.id == entry.id { conversation = nil; messages = []; drafts.chat = ""; readingRequested = true }
             chatDrafts.removeValue(forKey: entry.id)
             message = "已删除任务，可恢复上次删除。"; isError = false; reload()
             sync?.kick()
@@ -96,13 +96,13 @@ extension AppModel {
     }
 
     func saveNewTask() {
-        guard !taskDraft.isBlank else { return }
+        guard !drafts.task.isBlank else { return }
         do {
             guard let store else { throw NotoError("无法打开本地数据，草稿已保留。") }
-            let entry = try store.add(kind: "todo", text: taskDraft,
+            let entry = try store.add(kind: "todo", text: drafts.task,
                                       due: taskDraftState.hasDue ? Self.dateKey(taskDraftState.date) : nil,
                                       status: taskDraftState.status, priority: taskDraftState.important ? "important" : "normal")
-            taskCreating = false; taskDraftState.reset(); taskDraft = ""
+            taskCreating = false; taskDraftState.reset(); drafts.task = ""
             dueOnly = false
             if !search.isEmpty { search = "" }
             if importantOnly && entry.priority != "important" { importantOnly = false }

@@ -30,20 +30,20 @@ extension AppModel {
         composerPosition = nil
         edit = EditState(status: entry.status ?? "pending", important: entry.priority == "important",
                          hasDue: entry.due != nil, date: entry.due.flatMap { TaskDates.date($0) } ?? Date())
-        editing = entry; editDraft = entry.text; edit.error = ""
+        editing = entry; drafts.edit = entry.text; edit.error = ""
     }
     func saveEditing() {
-        guard let editing, !editDraft.isBlank else { return }
+        guard let editing, !drafts.edit.isBlank else { return }
         if editing.kind == "todo" {
             do {
                 guard let store else { throw NotoError("无法打开本地数据。") }
-                let changed = try store.updateTodo(id: editing.id, text: editDraft, due: editDue, clearDue: editDue == nil,
+                let changed = try store.updateTodo(id: editing.id, text: drafts.edit, due: editDue, clearDue: editDue == nil,
                                                    status: edit.status, priority: edit.important ? "important" : "normal", expected: editing)
                 remember(before: [editing], after: [changed], message: "已更新任务。")
                 if conversation?.id == changed.id { conversation = changed }
                 self.editing = nil
             } catch { edit.error = error.localizedDescription }
-        } else { update(editing, text: editDraft, due: editDue) }
+        } else { update(editing, text: drafts.edit, due: editDue) }
     }
     func cancelEditing() { editing = nil; edit.error = "" }
     func setSearch(_ value: String) {
@@ -64,7 +64,7 @@ extension AppModel {
     }
     func save(todo: Bool = false) {
         guard let store else { return }
-        var content = draft.trimmed
+        var content = drafts.composer.trimmed
         guard !content.isEmpty else { return }
         var isTodo = todo
         for prefix in ["/todo ", "待办："] where content.hasPrefix(prefix) {
@@ -73,7 +73,7 @@ extension AppModel {
         }
         do {
             let entry = try store.add(kind: isTodo ? "todo" : "note", text: content)
-            draft = ""; composerPosition = nil
+            drafts.composer = ""; composerPosition = nil
             if !search.isEmpty { search = "" }
             remember(before: [], after: [entry], message: isTodo ? "已添加任务。" : "已记下。")
         } catch { fail(error) }
