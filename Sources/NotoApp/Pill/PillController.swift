@@ -1,4 +1,4 @@
-// 屏幕边缘的屏幕边缘：液态玻璃 / 纯黑表面，悬停展开「今日任务」「写一笔」，
+// 屏幕边缘的控制器：液态玻璃 / 纯黑表面，悬停展开「今日任务」「写一笔」，
 // 两端弧线负责移动与设置，悬停待办 / 录入时出现玻璃描述卡；不抢焦点。
 //
 // 稳定性的关键：窗口尺寸固定为最大展开态、位置只在启动/换边/拖动/换屏时变化，
@@ -9,164 +9,6 @@
 import AppKit
 import SwiftUI
 import NotoCore
-
-/// 药丸吸附在哪条屏幕边。默认右侧，⌥ 拖动只沿这条边移动。
-enum PillEdge: String, CaseIterable, Identifiable {
-    case left, right, top, bottom
-
-    var id: String { rawValue }
-    var label: String {
-        switch self { case .left: "左侧"; case .right: "右侧"; case .top: "顶部"; case .bottom: "底部" }
-    }
-    var isVertical: Bool { self == .left || self == .right }
-}
-
-/// 无边框、非激活的面板。nonactivatingPanel 加 canBecomeKey = false，
-/// 让瞥一眼待办永远不会抢走当前应用的焦点；statusBar 层级让它盖住普通窗口。
-final class PillPanel: NSPanel {
-    var contextMenuProvider: (() -> NSMenu?)?
-    /// 展开状态下落在元素上的单击。SwiftUI 的视图会自己消费部分事件，这里只接住空白处的点击。
-    var onClick: ((CGPoint) -> Void)?
-    /// ⌥ 拖动时上报的原始位移增量；松手后由 onDragEnd 持久化。
-    var onDrag: ((CGFloat, CGFloat) -> Void)?
-    var onDragEnd: (() -> Void)?
-    var canCarry: ((CGPoint) -> Bool)?
-    var onDragStart: ((Bool) -> Void)?
-
-    init(contentRect: NSRect) {
-        super.init(contentRect: contentRect, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        level = .statusBar
-        collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
-        isOpaque = false
-        backgroundColor = .clear
-        hasShadow = false
-        acceptsMouseMovedEvents = true
-        title = "Noto 屏幕边缘"
-        identifier = NSUserInterfaceItemIdentifier("noto-edge")
-        isMovable = false
-        isMovableByWindowBackground = false
-        hidesOnDeactivate = false
-        becomesKeyOnlyIfNeeded = true
-        isReleasedWhenClosed = false
-    }
-
-    override var canBecomeKey: Bool { false }
-    override var canBecomeMain: Bool { false }
-
-    var isInteracting = false
-
-    // Route chrome gestures before SwiftUI's subviews consume them.
-    override func sendEvent(_ event: NSEvent) {
-        guard let view = contentView, view.hitTest(event.locationInWindow) != nil else {
-            return super.sendEvent(event)
-        }
-        if event.type == .rightMouseDown, let menu = contextMenuProvider?() {
-            isInteracting = true
-            NSMenu.popUpContextMenu(menu, with: event, for: view)
-            isInteracting = false
-        } else if event.type == .leftMouseDown {
-            let carry = canCarry?(localPoint(fromWindow: event.locationInWindow)) == true && !event.modifierFlags.contains(.option)
-            if event.modifierFlags.contains(.option) || carry {
-                isInteracting = true
-                onDragStart?(carry)
-                trackOptionDrag()
-                isInteracting = false
-            } else { onClick?(localPoint(fromWindow: event.locationInWindow)) }
-        } else { super.sendEvent(event) }
-    }
-
-    /// 窗口底边原点换成面板左上原点，与 SwiftUI 的翻转坐标一致。
-    private func localPoint(fromWindow point: NSPoint) -> CGPoint {
-        guard let size = contentView?.bounds.size else { return .zero }
-        return CGPoint(x: point.x, y: size.height - point.y)
-    }
-
-    /// 阻塞读取本窗口的事件流直到松手，是 AppKit 自定义拖动的标准做法。
-    private func trackOptionDrag() {
-        while let event = nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) {
-            switch event.type {
-            case .leftMouseDragged: onDrag?(event.deltaX, -event.deltaY)
-            case .leftMouseUp: onDragEnd?(); return
-            default: return
-            }
-        }
-    }
-}
-
-// A plain content container prevents NSHostingView's ideal size from resizing
-// the NSPanel. Adapted from Codenotch's NotchContainerView (MIT).
-final class PillContainerView: NSView {
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        let local = convert(point, from: superview)
-        guard bounds.contains(local) else { return nil }
-        return subviews.reversed().compactMap { $0.hitTest(local) }.first
-    }
-}
-
-final class PillHostingView: NSHostingView<PillRootView> {
-    var interactiveRects: [CGRect] = []
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        let local = convert(point, from: superview)
-        guard interactiveRects.contains(where: { $0.contains(local) }) else { return nil }
-        return super.hitTest(point)
-    }
-}
-
-// AppKit screen coordinates have a bottom-left origin; panel content is flipped.
-// Keep positioning and persistence inverse operations on all four edges.
-enum PillPlacement {
-    static func nearestEdge(point: CGPoint, screen: CGRect) -> PillEdge {
-        let distances: [(PillEdge, CGFloat)] = [(.left, abs(point.x - screen.minX)), (.right, abs(screen.maxX - point.x)), (.top, abs(screen.maxY - point.y)), (.bottom, abs(point.y - screen.minY))]
-        return distances.min { $0.1 < $1.1 }!.0
-    }
-    static func frame(screen: CGRect, size: CGSize, edge: PillEdge, offset: Double, anchor: CGFloat) -> CGRect {
-        let along = edge.isVertical ? screen.height : screen.width
-        let extent = edge.isVertical ? size.height : size.width
-        let position = min(max(CGFloat(offset) * along - anchor, 0), max(0, along - extent))
-        switch edge {
-        case .left: return CGRect(x: screen.minX, y: screen.minY + position, width: size.width, height: size.height).integral
-        case .right: return CGRect(x: screen.maxX - size.width, y: screen.minY + position, width: size.width, height: size.height).integral
-        case .top: return CGRect(x: screen.minX + position, y: screen.maxY - size.height, width: size.width, height: size.height).integral
-        case .bottom: return CGRect(x: screen.minX + position, y: screen.minY, width: size.width, height: size.height).integral
-        }
-    }
-    static func offset(frame: CGRect, screen: CGRect, edge: PillEdge, anchor: CGFloat) -> Double {
-        let value = edge.isVertical ? (frame.minY + anchor - screen.minY) / max(1, screen.height) : (frame.minX + anchor - screen.minX) / max(1, screen.width)
-        return min(max(value, 0), 1)
-    }
-}
-
-/// 前台应用是否正在指定屏幕上全屏。
-/// 只认「窗口完全覆盖整块屏幕」这一种信号：原生全屏的窗口边界就是整块屏幕。
-/// codenotch 原实现还接受「从菜单栏下方开始、贴到屏幕底」的窗口，那会把
-/// 最大化（但非全屏）的普通应用误判成全屏，让药丸在最常用的前台场景消失。
-enum PillFullscreen {
-    static func isFrontmostAppFullScreen(on screen: NSScreen) -> Bool {
-        guard let app = NSWorkspace.shared.frontmostApplication else { return false }
-        guard app.bundleIdentifier != Bundle.main.bundleIdentifier else { return false }
-
-        // AppKit 坐标（主屏左下为原点）换成 CoreGraphics 坐标（左上为原点）再比较窗口框。
-        let primaryHeight = NSScreen.screens.first?.frame.height ?? screen.frame.height
-        let bounds = CGRect(x: screen.frame.minX, y: primaryHeight - screen.frame.maxY,
-                            width: screen.frame.width, height: screen.frame.height)
-        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
-            return false
-        }
-        for info in list {
-            guard let pid = info[kCGWindowOwnerPID as String] as? pid_t, pid == app.processIdentifier,
-                  let layer = info[kCGWindowLayer as String] as? Int, layer == 0,
-                  let dict = info[kCGWindowBounds as String] as? NSDictionary,
-                  let b = CGRect(dictionaryRepresentation: dict)
-            else { continue }
-            let coversScreen = abs(b.origin.x - bounds.origin.x) <= 4
-                && abs(b.origin.y - bounds.origin.y) <= 4
-                && abs(b.width - bounds.width) <= 4
-                && abs(b.height - bounds.height) <= 4
-            if coversScreen { return true }
-        }
-        return false
-    }
-}
 
 @MainActor
 final class PillController: NSObject {
@@ -181,7 +23,9 @@ final class PillController: NSObject {
     static let tabAlong: CGFloat = bodyStart + (bodyLength - collapsedLength) / 2
     static let cardGap: CGFloat = 10.5
     static let cardAcross: CGFloat = 254.2
-    static let arcMargin: CGFloat = 0
+
+    /// 展开/收起共用的弹簧；窗口框纹丝不动，只有剪影在窗口内形变。
+    static let spring = Animation.spring(response: 0.42, dampingFraction: 0.78)
 
     static func windowSize(for edge: PillEdge) -> CGSize {
         edge.isVertical
@@ -224,9 +68,7 @@ final class PillController: NSObject {
 
     private var edge: PillEdge { model.edge }
     private var savedEdge: PillEdge { PillEdge(rawValue: defaults.string(forKey: "pillEdge") ?? "") ?? .right }
-
     private var alwaysExpanded: Bool { defaults.string(forKey: "pillVisibility") == "always" }
-
     private var enabled: Bool { defaults.object(forKey: "pillEnabled") as? Bool ?? true }
 
     /// 凸舌中点在沿边方向上的落点（占屏长比例）。
@@ -238,29 +80,25 @@ final class PillController: NSObject {
     func start() {
         guard !started else { return }
         started = true
-        let center = NotificationCenter.default
-        observers.append(center.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.syncWithSettings() }
-        })
-        observers.append(center.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.updateForFullscreen() }
-        })
-        observers.append(center.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.updateForFullscreen() }
-        })
-        observers.append(center.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.syncWithSettings() }
-        })
+        func observe(_ name: Notification.Name, _ handle: @escaping (PillController) -> Void) {
+            observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in guard let self else { return }; handle(self) }
+            })
+        }
+        observe(UserDefaults.didChangeNotification) { $0.syncWithSettings() }
+        observe(NSWorkspace.activeSpaceDidChangeNotification) { $0.updateForFullscreen() }
+        observe(NSWorkspace.didActivateApplicationNotification) { $0.updateForFullscreen() }
+        observe(NSApplication.didChangeScreenParametersNotification) { $0.syncWithSettings() }
         // 光标不会为了停在原地而产生事件，所以低频轮询兜底；全局监视器负责快速响应移动。
         // 数据不在这里轮询：AppModel 数据变化后主动推送（见 PillModel.refresh）。
         startPollTimer()
         let handler: (NSEvent) -> Void = { [weak self] event in
             guard let self else { return }
             // 高频鼠标事件先在投递线程节流，再跳 MainActor，避免每帧多次 hop。
-            monitorLock.lock()
-            let skip = event.timestamp - lastCursorEventAt < 1.0 / 90.0
-            if !skip { lastCursorEventAt = event.timestamp }
-            monitorLock.unlock()
+            self.monitorLock.lock()
+            let skip = event.timestamp - self.lastCursorEventAt < 1.0 / 90.0
+            if !skip { self.lastCursorEventAt = event.timestamp }
+            self.monitorLock.unlock()
             guard !skip else { return }
             Task { @MainActor in self.cursorMoved() }
         }
@@ -289,8 +127,7 @@ final class PillController: NSObject {
 
     private func syncWithSettings() {
         guard !model.isMoving else { return }
-        let changedEdge = model.edge != savedEdge
-        if changedEdge { setExpanded(false, animate: false) }
+        if model.edge != savedEdge { setExpanded(false, animate: false) }
         model.edge = savedEdge
         if enabled {
             if panel == nil { createPanel() }
@@ -327,7 +164,7 @@ final class PillController: NSObject {
         panel.onDrag = { [weak self] dx, dy in self?.drag(byDx: dx, dy: dy) }
         panel.canCarry = { [weak self] local in self?.model.expanded == true && self?.elementRect(.move).contains(local) == true }
         panel.onDragStart = { [weak self] carry in
-            self?.foldWork?.cancel(); self?.foldWork = nil
+            self?.cancelFold()
             self?.model.isMoving = carry
         }
         panel.onDragEnd = { [weak self] in
@@ -349,6 +186,7 @@ final class PillController: NSObject {
     }
 
     // MARK: - 定位：across = 离屏幕边框的进深，along = 沿边方向；本地坐标左上为原点。
+    // 命中矩形一律先在「右侧」规范空间里计算，再映射到实际边。
 
     private var anchor: CGFloat { edge.isVertical ? Self.windowSize(for: edge).height - Self.bodyStart - PillMetrics.length(for: edge) / 2 : Self.bodyStart + PillMetrics.length(for: edge) / 2 }
 
@@ -369,6 +207,11 @@ final class PillController: NSObject {
         rect(across: 0, along: 0, depth: barDepth, length: PillMetrics.length(for: edge) + 64)
     }
 
+    /// 展开卡与药丸条之间的桥接热区，悬停经过时不收起。
+    private var bridgeRect: CGRect {
+        rect(across: barDepth, along: 0, depth: Self.cardGap, length: PillMetrics.length(for: edge) + 64)
+    }
+
     static func cardFrame(edge: PillEdge, element: PillElement, height: CGFloat, panelSize: CGSize) -> CGRect {
         let width: CGFloat = edge.isVertical ? cardAcross : 226
         let depth: CGFloat = edge.isVertical ? height : height + 28.2
@@ -387,18 +230,12 @@ final class PillController: NSObject {
         Self.cardFrame(edge: edge, element: model.hovered ?? .today, height: model.cardHeight(for: model.hovered ?? .today), panelSize: Self.windowSize(for: edge))
     }
 
+    /// 规范（右缘）矩形 = 贴边在 x 最大侧；水平边先转置成规范尺寸，再映射回实际面板。
     private func rect(across: CGFloat, along: CGFloat, depth: CGFloat, length: CGFloat) -> CGRect {
         let size = Self.windowSize(for: edge)
-        switch edge {
-        case .right:
-            return CGRect(x: size.width - across - depth, y: along, width: depth, height: length)
-        case .left:
-            return CGRect(x: across, y: along, width: depth, height: length)
-        case .top:
-            return CGRect(x: along, y: across, width: length, height: depth)
-        case .bottom:
-            return CGRect(x: along, y: size.height - across - depth, width: length, height: depth)
-        }
+        let canonicalSize = edge.canonicalSize(of: size)
+        let canonical = CGRect(x: canonicalSize.width - across - depth, y: along, width: depth, height: length)
+        return canonical.applying(edge.contentTransform(in: size))
     }
 
     private func elementRect(_ element: PillElement) -> CGRect {
@@ -407,8 +244,7 @@ final class PillController: NSObject {
     }
 
     func hoverTarget(at local: CGPoint) -> PillElement? {
-        let bridge = rect(across: barDepth, along: 0, depth: Self.cardGap, length: PillMetrics.length(for: edge) + 64)
-        if model.hasCard && (cardRect.contains(local) || bridge.contains(local)) { return model.hovered }
+        if model.hasCard && (cardRect.contains(local) || bridgeRect.contains(local)) { return model.hovered }
         guard barRect.contains(local) else { return nil }
         return [PillElement.today, .compose, .settings, .move].first { elementRect($0).contains(local) }
     }
@@ -435,17 +271,17 @@ final class PillController: NSObject {
 
         if !model.expanded {
             // 收起态：光标碰到凸舌即展开。
-            let overTab = tabRect.insetBy(dx: -10, dy: -8).contains(local)
-            hosting?.interactiveRects = [tabRect.insetBy(dx: -10, dy: -8)]
-            panel.ignoresMouseEvents = !overTab
-            if overTab { setExpanded(true, animate: true) }
+            let tabHit = tabRect.insetBy(dx: -10, dy: -8)
+            hosting?.interactiveRects = [tabHit]
+            panel.ignoresMouseEvents = !tabHit.contains(local)
+            if tabHit.contains(local) { setExpanded(true, animate: true) }
             return
         }
 
         let overBar = barRect.contains(local)
         let overCard = model.hasCard && cardRect.contains(local)
-        let overBridge = model.hasCard && rect(across: barDepth, along: 0, depth: Self.cardGap, length: PillMetrics.length(for: edge) + 64).contains(local)
-        hosting?.interactiveRects = [barRect] + (!model.hasCard ? [] : [cardRect])
+        let overBridge = model.hasCard && bridgeRect.contains(local)
+        hosting?.interactiveRects = model.hasCard ? [barRect, cardRect] : [barRect]
         panel.ignoresMouseEvents = !(overBar || overCard)
 
         let target = hoverTarget(at: local)
@@ -453,49 +289,47 @@ final class PillController: NSObject {
             withAnimation(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? nil : .easeOut(duration: 0.15)) { model.hovered = target }
         }
 
-        if overBar || overCard || overBridge { foldWork?.cancel(); foldWork = nil }
-        if !overBar, !overCard, !overBridge, !alwaysExpanded, foldWork == nil {
-            let work = DispatchWorkItem { [weak self] in
-                Task { @MainActor in
-                    guard let self else { return }
-                    self.foldWork = nil
-                    guard self.panel?.isInteracting != true else { return }
-                    self.setExpanded(false, animate: true)
-                }
-            }
-            foldWork = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + foldGrace, execute: work)
+        if overBar || overCard || overBridge {
+            cancelFold()
+        } else if !alwaysExpanded, foldWork == nil {
+            scheduleFold()
         }
+    }
+
+    private func cancelFold() {
+        foldWork?.cancel()
+        foldWork = nil
+    }
+
+    private func scheduleFold() {
+        let work = DispatchWorkItem { [weak self] in
+            Task { @MainActor in
+                guard let self, self.panel?.isInteracting != true else { return }
+                self.foldWork = nil
+                self.setExpanded(false, animate: true)
+            }
+        }
+        foldWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + foldGrace, execute: work)
     }
 
     /// 接触即展开；收起由 cursorMoved 里的宽限计时负责。
     /// 只切换模型状态——剪影形变交给 SwiftUI，窗口框纹丝不动。
     private func setExpanded(_ wanted: Bool, animate: Bool) {
+        cancelFold()
+        guard wanted ? !model.expanded : (model.expanded || model.hovered != nil) else { return }
+        let change = {
+            self.model.expanded = wanted
+            if !wanted { self.model.hovered = nil }
+        }
+        if animate && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            withAnimation(Self.spring, change)
+        } else {
+            change()
+        }
         if wanted {
-            foldWork?.cancel()
-            foldWork = nil
-            guard !model.expanded else { return }
-            let change = { self.model.expanded = true }
-            if animate && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-                withAnimation(.spring(response: 0.42, dampingFraction: 0.78), change)
-            } else {
-                change()
-            }
             model.refresh(force: true)
             cursorMoved()
-        } else {
-            foldWork?.cancel()
-            foldWork = nil
-            guard model.expanded || model.hovered != nil else { return }
-            let change = {
-                self.model.expanded = false
-                self.model.hovered = nil
-            }
-            if animate && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-                withAnimation(.spring(response: 0.42, dampingFraction: 0.78), change)
-            } else {
-                change()
-            }
         }
     }
 
@@ -528,10 +362,7 @@ final class PillController: NSObject {
     func openComposer() {
         fold()
         showWindow?()
-        NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" }) {
-            window.makeKeyAndOrderFront(nil)
-        }
+        activateMainWindow()
         appModel?.switchMode(.notes)
         if appModel?.mode == .notes { appModel?.showComposer() }
     }
@@ -539,6 +370,10 @@ final class PillController: NSObject {
     func openMainWindow() {
         fold()
         showWindow?()
+        activateMainWindow()
+    }
+
+    private func activateMainWindow() {
         NSApp.activate(ignoringOtherApps: true)
         if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" }) {
             window.makeKeyAndOrderFront(nil)
@@ -546,8 +381,7 @@ final class PillController: NSObject {
     }
 
     private func fold() {
-        foldWork?.cancel()
-        foldWork = nil
+        cancelFold()
         withAnimation(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? nil : .easeOut(duration: 0.22)) {
             model.expanded = alwaysExpanded
             model.hovered = nil
