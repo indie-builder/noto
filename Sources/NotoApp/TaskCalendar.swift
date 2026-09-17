@@ -61,10 +61,7 @@ struct TaskCalendar: View {
                     }.frame(width: 92, height: 28)
                 }
                 if searching || model.importantOnly {
-                    HStack {
-                        Text("\(model.visibleTasks.count) 条匹配任务").foregroundStyle(.secondary)
-                        Button("清除筛选") { model.setSearch(""); model.setImportantOnly(false) }.buttonStyle(QuietButtonStyle())
-                    }.font(NotoDesign.caption)
+                    FilterStatusRow(model: model)
                 }
                 if searching {
                     animatedDetails

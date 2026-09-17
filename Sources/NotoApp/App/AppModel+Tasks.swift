@@ -63,6 +63,11 @@ extension AppModel {
         importantOnly = value; completedLimit = 20
     }
 
+    /// 看板与日历筛选行的统一清除动作。
+    func clearFilters() {
+        setSearch(""); setImportantOnly(false); dueOnly = false
+    }
+
     func showNewTask(status: String = "pending") {
         if taskCreating { return }
         guard leaveUnchangedEditor() else { return }
@@ -91,7 +96,7 @@ extension AppModel {
     }
 
     func saveNewTask() {
-        guard !taskDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard !taskDraft.isBlank else { return }
         do {
             guard let store else { throw NotoError("无法打开本地数据，草稿已保留。") }
             let entry = try store.add(kind: "todo", text: taskDraft,

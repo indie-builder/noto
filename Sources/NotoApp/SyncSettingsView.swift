@@ -100,7 +100,7 @@ struct SyncSettingsView: View {
                     Label(controller.isSyncing ? "正在登录…" : "登录账号空间", systemImage: "person.crop.circle")
                 }
                 .buttonStyle(QuietButtonStyle(prominent: true))
-                .disabled(email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || password.isEmpty || controller.isSyncing)
+                .disabled(email.isBlank || password.isEmpty || controller.isSyncing)
                 Text("使用部署方创建的邮箱账号。本机任务可在登录后手动导入。")
                     .font(NotoDesign.caption).foregroundStyle(.secondary)
             }
@@ -162,18 +162,17 @@ struct SyncSettingsView: View {
     }
 
     private func errorText(_ message: String) -> some View {
-        Label(message, systemImage: "exclamationmark.circle")
-            .font(NotoDesign.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+        ErrorLabel(text: message)
     }
 
     private func saveConfiguration() {
         do {
-            guard let serverURL = URL(string: server.trimmingCharacters(in: .whitespacesAndNewlines)),
-                  let syncURL = URL(string: syncServer.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            guard let serverURL = URL(string: server.trimmed),
+                  let syncURL = URL(string: syncServer.trimmed) else {
                 throw NotoError("请输入有效的服务地址。")
             }
             try controller.configure(SyncConfiguration(supabaseURL: serverURL,
-                publishableKey: publicKey.trimmingCharacters(in: .whitespacesAndNewlines), powerSyncURL: syncURL))
+                publishableKey: publicKey.trimmed, powerSyncURL: syncURL))
             error = ""; showConfiguration = false
         } catch { self.error = error.localizedDescription }
     }

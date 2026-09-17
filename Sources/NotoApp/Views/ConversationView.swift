@@ -116,7 +116,7 @@ struct ConversationView: View {
                     } else {
                         Button("发送") { model.sendChat() }
                             .buttonStyle(QuietButtonStyle(prominent: true)).help("发送消息（⌘ 回车）").accessibilityLabel("发送消息")
-                            .disabled(toolAvailable == false || pending || drafts.chat.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .disabled(toolAvailable == false || pending || drafts.chat.isBlank)
                     }
                 }.font(NotoDesign.caption)
             }.padding(.horizontal, 24).padding(.bottom, 20).padding(.top, 12)

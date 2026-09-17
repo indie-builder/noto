@@ -52,10 +52,7 @@ struct TaskBoard: View {
                     ImportantTaskFilter(model: model)
                 }
                 if model.dueOnly || model.importantOnly || !model.search.isEmpty {
-                    HStack {
-                        Text(model.dueOnly ? "到期待办 · \(model.visibleTasks.count) 项" : "\(model.visibleTasks.count) 个匹配任务").foregroundStyle(.secondary)
-                        Button("清除筛选") { model.setSearch(""); model.setImportantOnly(false); model.dueOnly = false }
-                    }.font(NotoDesign.caption)
+                    FilterStatusRow(model: model, dueOnlyTitle: "到期待办 · \(model.visibleTasks.count) 项")
                 }
                 if model.dueOnly {
                     ScrollView {
@@ -95,38 +92,55 @@ private struct TaskColumn: View {
     private var displayed: [Entry] { status == .completed ? Array(tasks.prefix(model.completedLimit)) : tasks }
     var body: some View {
         TaskDropArea(onDrop: { model.changeTask($0, status: status.rawValue) }) {
-        VStack(alignment: .leading, spacing: 12) {
-            if showsHeading {
-                HStack(spacing: 8) {
-                    Text(status.label).font(.system(size: 13, weight: .medium))
-                    Text("\(tasks.count)").font(NotoDesign.caption).monospacedDigit().foregroundStyle(.secondary)
-                        .contentTransition(.numericText()).animation(NotoMotion.animation(.feedback), value: tasks.count)
-                    Spacer()
-                }.frame(height: 28)
+            VStack(alignment: .leading, spacing: 12) {
+                if showsHeading {
+                    HStack(spacing: 8) {
+                        Text(status.label).font(.system(size: 13, weight: .medium))
+                        Text("\(tasks.count)").font(NotoDesign.caption).monospacedDigit().foregroundStyle(.secondary)
+                            .contentTransition(.numericText()).animation(NotoMotion.animation(.feedback), value: tasks.count)
+                        Spacer()
+                    }.frame(height: 28)
+                }
+                ScrollView {
+                    LazyVStack(spacing: 10) {
+                        if displayed.isEmpty {
+                            Button("添加任务") { model.quickCreateTask(status: status.rawValue) }
+                                .buttonStyle(QuietButtonStyle()).foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity).padding(.vertical, 24).excludeFromBlankInput(in: inputSpace)
+                        }
+                        ForEach(displayed) { entry in
+                            TaskCard(entry: entry, model: model)
+                                .excludeFromBlankInput(in: inputSpace).transition(.opacity.combined(with: .scale(scale: 0.985)))
+                        }
+                        if displayed.count < tasks.count {
+                            Button("加载更多") { model.completedLimit += 20 }
+                                .buttonStyle(QuietButtonStyle()).font(NotoDesign.caption).padding(.vertical, 10).excludeFromBlankInput(in: inputSpace)
+                        }
+                    }.padding(2)
+                        .animation(NotoMotion.animation(.layout), value: displayed.map(\.id))
+                }
             }
-            ScrollView {
-                LazyVStack(spacing: 10) {
-                    if displayed.isEmpty { Button("添加任务") { model.quickCreateTask(status: status.rawValue) }.buttonStyle(QuietButtonStyle()).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.vertical, 24).excludeFromBlankInput(in: inputSpace) }
-                    ForEach(displayed) { entry in
-                        TaskCard(entry: entry, model: model).excludeFromBlankInput(in: inputSpace).transition(.opacity.combined(with: .scale(scale: 0.985)))
-                    }
-                    if displayed.count < tasks.count {
-                        Button("加载更多") { model.completedLimit += 20 }
-                            .buttonStyle(QuietButtonStyle()).font(NotoDesign.caption).padding(.vertical, 10).excludeFromBlankInput(in: inputSpace)
-                    }
-                }.padding(2)
-                    .animation(NotoMotion.animation(.layout), value: displayed.map(\.id))
-            }
+            .padding(12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .coordinateSpace(name: inputSpace)
+            .onPreferenceChange(OccupiedAreas.self) { if $0 != occupied { occupied = $0 } }
+            .background(BlankClickObserver(excluded: occupied, floatingRect: nil,
+                onDoubleClick: { _ in model.quickCreateTask(status: status.rawValue) }, onOutsideClick: {}))
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .contentShape(Rectangle())
-        .coordinateSpace(name: inputSpace)
-        .onPreferenceChange(OccupiedAreas.self) { if $0 != occupied { occupied = $0 } }
-        .background(BlankClickObserver(excluded: occupied, floatingRect: nil,
-            onDoubleClick: { _ in model.quickCreateTask(status: status.rawValue) }, onOutsideClick: {}))
+    }
+}
 
+/// 状态切换与重要标记的菜单项：任务菜单与时间线记录菜单共用。
+@ViewBuilder func taskStateItems(entry: Entry, model: AppModel) -> some View {
+    ForEach(TodoStatus.allCases, id: \.self) { status in
+        Button { model.changeTask(entry, status: status.rawValue) } label: {
+            if entry.status == status.rawValue { Label(status.label, systemImage: "checkmark") }
+            else { Text(status.label) }
         }
+    }
+    Button(entry.isImportant ? "取消重要" : "标记重要") {
+        model.changeTask(entry, priority: entry.isImportant ? "normal" : "important")
     }
 }
 
@@ -138,19 +152,25 @@ struct TaskActionMenu: View {
         Menu {
             Button("编辑任务") { model.beginEditing(entry) }
             Button(entry.hasConversation ? "打开对话" : "与 AI 讨论") { model.openConversation(entry) }.disabled(model.busy)
-            ForEach(TodoStatus.allCases, id: \.self) { status in
-                Button { model.changeTask(entry, status: status.rawValue) } label: {
-                    if entry.status == status.rawValue { Label(status.label, systemImage: "checkmark") }
-                    else { Text(status.label) }
-                }
-            }
-            Button(entry.isImportant ? "取消重要" : "标记重要") {
-                model.changeTask(entry, priority: entry.isImportant ? "normal" : "important")
-            }
+            taskStateItems(entry: entry, model: model)
             Divider()
             Button("删除任务", role: .destructive) { model.deleteTask(entry) }.disabled(model.busy)
         } label: { ActionIcon("ellipsis") }
             .actionMenuStyle().help("任务操作").accessibilityLabel("任务操作")
+    }
+}
+
+/// 匹配计数 + 一键清除筛选；看板与日历的筛选行共用。
+struct FilterStatusRow: View {
+    @ObservedObject var model: AppModel
+    /// 到期筛选下的专属标题；不传则为「N 条匹配任务」。
+    var dueOnlyTitle: String?
+    var body: some View {
+        HStack {
+            Text(model.dueOnly && dueOnlyTitle != nil ? dueOnlyTitle! : "\(model.visibleTasks.count) 条匹配任务")
+                .foregroundStyle(.secondary)
+            Button("清除筛选") { model.clearFilters() }
+        }.font(NotoDesign.caption)
     }
 }
 

@@ -5,7 +5,7 @@ import NotoCore
 extension AppModel {
     func ask() {
         guard !busy, composerPosition != nil, let store else { return }
-        let input = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let input = draft.trimmed
         guard !input.isEmpty else { return }
         do {
             if let conversation { chatDrafts[conversation.id] = chatDraft }
@@ -49,7 +49,7 @@ extension AppModel {
     func sendChat() {
         guard !busy, messages.last?.role != "user", let store else { return }
         if newConversationOpen {
-            guard !chatDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            guard !chatDraft.isBlank else { return }
             do {
                 let entry = try store.startConversation(chatDraft)
                 conversation = entry; messages = try store.messages(for: entry.id)

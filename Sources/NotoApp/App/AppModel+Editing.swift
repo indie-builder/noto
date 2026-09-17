@@ -33,7 +33,7 @@ extension AppModel {
         editing = entry; editDraft = entry.text; edit.error = ""
     }
     func saveEditing() {
-        guard let editing, !editDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard let editing, !editDraft.isBlank else { return }
         if editing.kind == "todo" {
             do {
                 guard let store else { throw NotoError("无法打开本地数据。") }
@@ -64,7 +64,7 @@ extension AppModel {
     }
     func save(todo: Bool = false) {
         guard let store else { return }
-        var content = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        var content = draft.trimmed
         guard !content.isEmpty else { return }
         var isTodo = todo
         for prefix in ["/todo ", "待办："] where content.hasPrefix(prefix) {

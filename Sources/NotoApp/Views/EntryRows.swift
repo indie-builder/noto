@@ -98,10 +98,7 @@ struct EntryRow: View {
             Button("编辑", action: edit)
             if entry.kind == "note" { Button("转为任务") { model.convertToTask(entry) } }
             if entry.kind == "todo" {
-                ForEach(TodoStatus.allCases, id: \.self) { status in
-                    Button(status.label) { model.changeTask(entry, status: status.rawValue) }
-                }
-                Button(entry.isImportant ? "取消重要" : "标记重要") { model.changeTask(entry, priority: entry.isImportant ? "normal" : "important") }
+                taskStateItems(entry: entry, model: model)
                 Button("删除任务", role: .destructive) { model.deleteTask(entry) }.disabled(model.busy)
             }
             Button("复制") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(entry.text, forType: .string) }
@@ -176,19 +173,19 @@ struct InlineEditView: View {
                 TaskDateControl(hasDue: $model.edit.hasDue, date: $model.edit.date)
             }
             if !model.edit.error.isEmpty {
-                Label(model.edit.error, systemImage: "exclamationmark.circle").font(NotoDesign.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                ErrorLabel(text: model.edit.error)
             }
             HStack {
                 Spacer(minLength: 0)
                 Button("放弃修改") { model.cancelEditing() }.buttonStyle(QuietButtonStyle())
                 Button("保存") { model.saveEditing() }.buttonStyle(QuietButtonStyle(prominent: true)).help("保存（⌘↵）；回车换行")
-                    .disabled(drafts.edit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(drafts.edit.isBlank)
             }.font(NotoDesign.caption)
         }.padding(16)
             .background(NotoDesign.field, in: RoundedRectangle(cornerRadius: NotoDesign.radius))
             .onExitCommand(perform: close)
             .unsavedChangesAlert(isPresented: $confirmClose, title: "保存记录修改？",
-                                 canSave: !drafts.edit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                                 canSave: !drafts.edit.isBlank,
                                  save: { model.saveEditing() }, discard: { model.cancelEditing() })
     }
 }

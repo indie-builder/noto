@@ -19,7 +19,7 @@ struct TaskDraftState {
     var attributes: TaskDraftAttributes {
         TaskDraftAttributes(status: status, important: important, due: hasDue ? AppModel.dateKey(date) : nil)
     }
-    func dirty(text: String) -> Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || attributes != baseline }
+    func dirty(text: String) -> Bool { !text.isBlank || attributes != baseline }
     mutating func reset() {
         self = TaskDraftState()
     }

@@ -45,7 +45,7 @@ struct RecentlyDeletedView: View {
                 }
             }
             if !error.isEmpty {
-                Label(error, systemImage: "exclamationmark.circle").font(NotoDesign.caption).foregroundStyle(.red)
+                ErrorLabel(text: error)
             }
         }.padding(24).background(NotoGlassSurface(radius: 20)).frame(width: 490, height: 470).buttonStyle(QuietButtonStyle())
             .task(id: model.store.map(ObjectIdentifier.init)) { await reload() }
