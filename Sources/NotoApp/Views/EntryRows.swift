@@ -163,22 +163,22 @@ struct InlineEditView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(entry.kind == "todo" ? "编辑任务" : "编辑记录").font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
-            Composer(text: $drafts.edit, enabled: true, purpose: .edit, onSubmit: { model.saveEditing() }, onCancel: close)
+            Composer(text: $drafts.edit, purpose: .edit, onSubmit: { model.saveEditing() }, onCancel: close)
                 .frame(minHeight: 64)
             if entry.kind == "todo" {
                 HStack {
-                    Picker("状态", selection: $model.editStatus) {
+                    Picker("状态", selection: $model.edit.status) {
                         ForEach(TodoStatus.allCases, id: \.self) { Text($0.label).tag($0.rawValue) }
                     }
-                    Button { model.editImportant.toggle() } label: {
-                        ActionIcon(model.editImportant ? "star.fill" : "star")
+                    Button { model.edit.important.toggle() } label: {
+                        ActionIcon(model.edit.important ? "star.fill" : "star")
                     }.buttonStyle(QuietButtonStyle(icon: true)).help("切换重要标记").accessibilityLabel("重要任务")
-                        .accessibilityValue(model.editImportant ? "已开启" : "已关闭")
+                        .accessibilityValue(model.edit.important ? "已开启" : "已关闭")
                 }.font(NotoDesign.caption)
-                TaskDateControl(hasDue: $model.editHasDue, date: $model.editDate)
+                TaskDateControl(hasDue: $model.edit.hasDue, date: $model.edit.date)
             }
-            if !model.editError.isEmpty {
-                Label(model.editError, systemImage: "exclamationmark.circle").font(NotoDesign.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+            if !model.edit.error.isEmpty {
+                Label(model.edit.error, systemImage: "exclamationmark.circle").font(NotoDesign.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
             }
             HStack {
                 Spacer(minLength: 0)

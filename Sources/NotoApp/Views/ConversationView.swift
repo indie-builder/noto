@@ -105,7 +105,7 @@ struct ConversationView: View {
                         Button("重试") { model.requestReply() }.buttonStyle(QuietButtonStyle())
                     }
                 }
-                Composer(text: $drafts.chat, enabled: true, purpose: .chat, onSubmit: { model.sendChat() }, onCancel: { model.closeConversation() })
+                Composer(text: $drafts.chat, purpose: .chat, onSubmit: { model.sendChat() }, onCancel: { model.closeConversation() })
                     .frame(minHeight: 40).fixedSize(horizontal: false, vertical: true)
                     .padding(14).background(NotoDesign.field, in: RoundedRectangle(cornerRadius: NotoDesign.radius))
                         HStack {

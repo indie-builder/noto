@@ -64,15 +64,15 @@ final class InteractionTests: XCTestCase {
             XCTAssertFalse(model.taskDraftDirty)
             model.taskCreating = false
             model.quickCreateTask(status: "in_progress", date: second)
-            XCTAssertEqual(model.taskDraftStatus, "in_progress")
-            XCTAssertEqual(AppModel.dateKey(model.taskDraftDate), "2026-09-17")
-            XCTAssertFalse(model.taskDraftRestored)
-            model.taskDraftImportant = true
+            XCTAssertEqual(model.taskDraftState.status, "in_progress")
+            XCTAssertEqual(AppModel.dateKey(model.taskDraftState.date), "2026-09-17")
+            XCTAssertFalse(model.taskDraftState.restored)
+            model.taskDraftState.important = true
             model.taskCreating = false
             model.quickCreateTask(date: first)
-            XCTAssertTrue(model.taskDraftRestored)
-            XCTAssertTrue(model.taskDraftImportant)
-            XCTAssertEqual(AppModel.dateKey(model.taskDraftDate), "2026-09-17")
+            XCTAssertTrue(model.taskDraftState.restored)
+            XCTAssertTrue(model.taskDraftState.important)
+            XCTAssertEqual(AppModel.dateKey(model.taskDraftState.date), "2026-09-17")
         }.value
     }
 
@@ -113,28 +113,28 @@ final class InteractionTests: XCTestCase {
             model.importantOnly = true
             model.quickCreateTask(status: "in_progress")
             XCTAssertTrue(model.taskCreating)
-            XCTAssertEqual(model.taskDraftStatus, "in_progress")
-            XCTAssertFalse(model.taskDraftHasDue)
-            XCTAssertTrue(model.taskDraftImportant)
+            XCTAssertEqual(model.taskDraftState.status, "in_progress")
+            XCTAssertFalse(model.taskDraftState.hasDue)
+            XCTAssertTrue(model.taskDraftState.important)
             model.taskDraft = "继续处理"
             model.taskCreating = false
             let date = try XCTUnwrap(TaskDates.date("2026-12-31"))
             model.quickCreateTask(status: "completed", date: date)
-            XCTAssertEqual(model.taskDraftStatus, "in_progress")
-            XCTAssertFalse(model.taskDraftHasDue)
+            XCTAssertEqual(model.taskDraftState.status, "in_progress")
+            XCTAssertFalse(model.taskDraftState.hasDue)
             XCTAssertEqual(model.taskDraft, "继续处理")
             model.saveNewTask()
             await model.waitForReload()
             model.switchMode(.calendar)
             model.quickCreateTask(date: date)
-            XCTAssertEqual(AppModel.dateKey(model.taskDraftDate), "2026-12-31")
-            XCTAssertTrue(model.taskDraftHasDue)
+            XCTAssertEqual(AppModel.dateKey(model.taskDraftState.date), "2026-12-31")
+            XCTAssertTrue(model.taskDraftState.hasDue)
             model.taskDraft = "当天任务"
             model.saveNewTask()
             await model.waitForReload()
             XCTAssertEqual(try store.todos(status: "all").first { $0.text == "当天任务" }?.due, "2026-12-31")
             model.quickCreateTask()
-            XCTAssertFalse(model.taskDraftHasDue)
+            XCTAssertFalse(model.taskDraftState.hasDue)
             model.taskCreating = false
             model.settings = true
             model.quickCreateTask()
@@ -240,7 +240,7 @@ final class InteractionTests: XCTestCase {
             XCTAssertEqual(model.editDraft, "修改后的文字")
             XCTAssertNil(model.composerPosition)
             XCTAssertTrue(model.search.isEmpty)
-            XCTAssertFalse(model.editError.isEmpty)
+            XCTAssertFalse(model.edit.error.isEmpty)
             model.cancelEditing(); model.showComposer(); model.save()
             XCTAssertNil(model.composerPosition)
             XCTAssertTrue(model.draft.isEmpty)
@@ -280,7 +280,7 @@ final class InteractionTests: XCTestCase {
             XCTAssertEqual(try store.list().first?.text, "来自其他进程")
             XCTAssertEqual(model.editDraft, "本地编辑中的草稿")
             XCTAssertNotNil(model.editing)
-            XCTAssertFalse(model.editError.isEmpty)
+            XCTAssertFalse(model.edit.error.isEmpty)
         }.value
     }
 
@@ -313,7 +313,7 @@ final class InteractionTests: XCTestCase {
             model.setSearch("转为"); model.switchMode(.board)
             await model.waitForReload()
             XCTAssertTrue(model.search.isEmpty)
-            model.showNewTask(status: "in_progress"); model.taskDraft = "重要任务"; model.taskDraftImportant = true
+            model.showNewTask(status: "in_progress"); model.taskDraft = "重要任务"; model.taskDraftState.important = true
             model.switchMode(.notes)
             await model.waitForReload()
             XCTAssertEqual(model.mode, .board); XCTAssertTrue(model.taskCreating)
@@ -321,7 +321,7 @@ final class InteractionTests: XCTestCase {
             await model.waitForReload()
             let task = try XCTUnwrap(model.tasks.first)
             XCTAssertEqual(task.status, "in_progress"); XCTAssertEqual(task.priority, "important")
-            model.beginEditing(task); model.editStatus = "completed"
+            model.beginEditing(task); model.edit.status = "completed"
             XCTAssertTrue(model.editDirty)
             model.setImportantOnly(true)
             XCTAssertFalse(model.importantOnly)

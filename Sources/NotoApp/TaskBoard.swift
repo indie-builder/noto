@@ -188,10 +188,10 @@ struct TaskEditor: View {
     @ObservedObject var drafts: TextDrafts
     private var creating: Bool { model.taskCreating }
     private var text: Binding<String> { creating ? $drafts.task : $drafts.edit }
-    private var status: Binding<String> { creating ? $model.taskDraftStatus : $model.editStatus }
-    private var important: Binding<Bool> { creating ? $model.taskDraftImportant : $model.editImportant }
-    private var hasDue: Binding<Bool> { creating ? $model.taskDraftHasDue : $model.editHasDue }
-    private var date: Binding<Date> { creating ? $model.taskDraftDate : $model.editDate }
+    private var status: Binding<String> { creating ? $model.taskDraftState.status : $model.edit.status }
+    private var important: Binding<Bool> { creating ? $model.taskDraftState.important : $model.edit.important }
+    private var hasDue: Binding<Bool> { creating ? $model.taskDraftState.hasDue : $model.edit.hasDue }
+    private var date: Binding<Date> { creating ? $model.taskDraftState.date : $model.edit.date }
     private func save() { if creating { model.saveNewTask() } else { model.saveEditing() } }
     private func cancel() {
         if !creating && model.editDirty { confirmClose = true }
@@ -204,7 +204,7 @@ struct TaskEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(creating ? (model.taskDraftRestored ? "继续草稿" : "新建任务") : "编辑任务")
+                Text(creating ? (model.taskDraftState.restored ? "继续草稿" : "新建任务") : "编辑任务")
                     .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
                 Spacer()
                 Button(action: cancel) { ActionIcon("xmark") }
@@ -212,11 +212,11 @@ struct TaskEditor: View {
                     .help(creating ? "收起，保留草稿（Esc）" : "取消编辑（Esc）")
                     .accessibilityLabel(creating ? "收起新建任务，保留草稿" : "取消编辑")
             }
-            Composer(text: text, enabled: true, purpose: .edit, onSubmit: save, onCancel: cancel, placeholder: "想做什么？")
+            Composer(text: text, purpose: .edit, onSubmit: save, onCancel: cancel, placeholder: "想做什么？")
                 .frame(minHeight: 48).fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 18).padding(.bottom, 22)
-            if !model.editError.isEmpty {
-                Label(model.editError, systemImage: "exclamationmark.circle")
+            if !model.edit.error.isEmpty {
+                Label(model.edit.error, systemImage: "exclamationmark.circle")
                     .font(NotoDesign.caption).foregroundStyle(.red)
                     .fixedSize(horizontal: false, vertical: true).padding(.bottom, 12)
             }

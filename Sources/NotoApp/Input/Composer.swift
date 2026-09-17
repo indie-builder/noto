@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-enum InputPurpose {
+enum InputPurpose: String {
     case newContent, chat, edit
     var focusNotification: Notification.Name {
         switch self { case .newContent: return .focusComposer; case .chat: return .focusChat; case .edit: return .focusEditor }
@@ -9,11 +9,13 @@ enum InputPurpose {
     var label: String {
         switch self { case .newContent: return "新建内容"; case .chat: return "继续对话"; case .edit: return "编辑记录内容" }
     }
+    var placeholder: String {
+        switch self { case .newContent: return "写下想法，⌘ 回车保存。"; case .chat: return "继续聊…"; case .edit: return "记录内容不能为空。" }
+    }
 }
 
 struct Composer: NSViewRepresentable {
     @Binding var text: String
-    let enabled: Bool
     let purpose: InputPurpose
     let onSubmit: () -> Void
     let onCancel: () -> Void
@@ -36,12 +38,7 @@ struct Composer: NSViewRepresentable {
         view.autoresizingMask = [.width]
         view.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         view.textContainer?.widthTracksTextView = true
-        switch purpose {
-        case .newContent: view.placeholder = "写下想法，⌘ 回车保存。"
-        case .chat: view.placeholder = "继续聊…"
-        case .edit: view.placeholder = "记录内容不能为空。"
-        }
-        if let placeholder { view.placeholder = placeholder }
+        view.placeholder = placeholder ?? purpose.placeholder
         view.setAccessibilityLabel(purpose.label)
         context.coordinator.view = view
         context.coordinator.observer = NotificationCenter.default.addObserver(forName: purpose.focusNotification, object: nil, queue: .main) { [weak view] _ in view?.window?.makeFirstResponder(view) }
@@ -62,7 +59,6 @@ struct Composer: NSViewRepresentable {
             view.scrollRangeToVisible(NSRange(location: 0, length: 0))
         }
         view.onSubmit = onSubmit; view.onCancel = onCancel
-        if view.isEditable != enabled { view.isEditable = enabled }
     }
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSScrollView, context: Context) -> CGSize? {
         let width = proposal.width ?? 600

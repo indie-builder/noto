@@ -22,7 +22,7 @@ final class SyncInteractionTests: XCTestCase {
             model.cancelEditing()
             model.showNewTask(); model.taskDraft = "Hidden task draft"; model.taskCreating = false
             XCTAssertFalse(model.canChangeSyncAccount())
-            model.taskDraft = ""; model.taskDraftHasDue = false
+            model.taskDraft = ""; model.taskDraftState.hasDue = false
             XCTAssertTrue(model.canChangeSyncAccount())
         }.value
     }
@@ -34,7 +34,7 @@ final class SyncInteractionTests: XCTestCase {
             let remoteTask = try account.add(kind: "todo", text: "Other account")
             let model = AppModel(store: local)
             model.mode = .board; model.reload(); await model.waitForReload()
-            model.toggle(localTask); await model.waitForReload()
+            model.changeTask(localTask, status: "completed"); await model.waitForReload()
             XCTAssertTrue(model.undoAvailable)
             model.highlightedTaskID = localTask.id
             model.search = "Local"

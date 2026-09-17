@@ -330,7 +330,7 @@ private struct NewContentInput: View {
                 Button { model.composerPosition = nil } label: { ActionIcon("xmark") }
                     .buttonStyle(QuietButtonStyle(icon: true)).accessibilityLabel("收起录入，保留草稿")
             }
-            Composer(text: $drafts.composer, enabled: true, purpose: .newContent, onSubmit: { model.save() }, onCancel: { model.composerPosition = nil })
+            Composer(text: $drafts.composer, purpose: .newContent, onSubmit: { model.save() }, onCancel: { model.composerPosition = nil })
                 .frame(minHeight: 48)
             if model.busy { Text("AI 正在回复，你可以继续保存记录。").font(NotoDesign.caption).foregroundStyle(.secondary) }
             HStack(spacing: 6) {
