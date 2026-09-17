@@ -80,8 +80,6 @@ final class InteractionTests: XCTestCase {
         model.showDueTasks()
         await model.waitForReload()
         XCTAssertEqual(Set(model.visibleTasks.map(\.text)), ["到期", "逾期"])
-        model.switchMode(.calendar)
-        XCTAssertFalse(model.dueOnly)
     }
 
     func testDateLabelsAvoidUrgencyForCompletedTasks() throws {
@@ -112,8 +110,7 @@ final class InteractionTests: XCTestCase {
         XCTAssertEqual(model.drafts.task, "继续处理")
         model.saveNewTask()
         await model.waitForReload()
-        model.switchMode(.calendar)
-        model.quickCreateTask(date: date)
+        model.quickCreateTask(status: "pending", date: date)
         XCTAssertEqual(AppModel.dateKey(model.taskDraftState.date), "2026-12-31")
         XCTAssertTrue(model.taskDraftState.hasDue)
         model.drafts.task = "当天任务"

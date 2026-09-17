@@ -2,6 +2,37 @@ import SwiftUI
 import AppKit
 import NotoCore
 
+// Keep the existing persisted "tasks" value for the board.
+enum ContentMode: String, CaseIterable, Identifiable {
+    case notes, board = "tasks"
+    var id: String { rawValue }
+    var isTaskView: Bool { self != .notes }
+    var label: String { switch self { case .notes: "记录"; case .board: "看板" } }
+    var icon: String { switch self { case .notes: "text.alignleft"; case .board: "rectangle.split.3x1" } }
+    var shortcut: KeyEquivalent { switch self { case .notes: "1"; case .board: "2" } }
+}
+
+// 任务行的共用判定与文案：看板卡与时间线行保持一致。
+extension Entry {
+    var isImportant: Bool { priority == "important" }
+    var isOverdue: Bool { !completed && (due.map { $0 < AppModel.dateKey(Date()) } ?? false) }
+    var dueLabel: String { due.map { TaskDates.taskLabel($0, completed: completed) } ?? "" }
+}
+
+struct ImportantTaskFilter: View {
+    @ObservedObject var model: AppModel
+    var body: some View {
+        HStack(spacing: 8) {
+            Button { model.setImportantOnly(!model.importantOnly) } label: {
+                ActionIcon(model.importantOnly ? "star.fill" : "star")
+                    .foregroundStyle(model.importantOnly ? Color.accentColor : Color.secondary)
+                    .background(model.importantOnly ? Color.accentColor.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 6))
+            }.buttonStyle(QuietButtonStyle(icon: true)).help(model.importantOnly ? "显示全部任务" : "只看重要任务")
+                .accessibilityLabel("只看重要任务").accessibilityValue(model.importantOnly ? "已开启" : "已关闭")
+        }
+    }
+}
+
 struct TaskCompletionButton: View {
     let entry: Entry
     @ObservedObject var model: AppModel

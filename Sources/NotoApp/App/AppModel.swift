@@ -39,8 +39,6 @@ final class AppModel: ObservableObject {
     @Published var entries: [Entry] = [] { didSet { invalidateDerivedViews() } }
     @Published var tasks: [Entry] = [] { didSet { invalidateDerivedViews() } }
     @Published var mode: ContentMode = .notes { didSet { if persistsViewMode { UserDefaults.standard.set(mode.rawValue, forKey: "contentMode") } } }
-    @Published var selectedCalendarDate = Date()
-    @Published var calendarUnscheduled = false
     @Published var taskDraftState = TaskDraftState()
     @Published var dueOnly = false { didSet { invalidateDerivedViews() } }
     @Published var importantOnly = false { didSet { invalidateDerivedViews() } }
