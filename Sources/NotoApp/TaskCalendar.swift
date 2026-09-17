@@ -11,6 +11,13 @@ enum ContentMode: String, CaseIterable, Identifiable {
     var shortcut: KeyEquivalent { switch self { case .notes: "1"; case .board: "2"; case .calendar: "3" } }
 }
 
+// 任务行的共用判定与文案：看板卡、日历行、时间线行保持一致。
+extension Entry {
+    var isImportant: Bool { priority == "important" }
+    var isOverdue: Bool { !completed && (due.map { $0 < AppModel.dateKey(Date()) } ?? false) }
+    var dueLabel: String { due.map { TaskDates.taskLabel($0, completed: completed) } ?? "" }
+}
+
 struct ImportantTaskFilter: View {
     @ObservedObject var model: AppModel
     var body: some View {
@@ -83,11 +90,11 @@ struct TaskCalendar: View {
                 HStack(spacing: 4) {
                     Text(searching ? "搜索任务" : monthLabel).font(.system(size: 18, weight: .semibold))
                         .contentTransition(.opacity).animation(NotoMotion.animation(.navigation), value: monthLabel)
-                    if !searching {
-                        iconButton("chevron.left", "上个月") { model.moveCalendarMonth(-1) }
-                        iconButton("chevron.right", "下个月") { model.moveCalendarMonth(1) }
-                        iconButton("location", "回到今天") { model.selectCalendarDate(Date()) }
-                    }
+                if !searching {
+                    QuietIconButton("chevron.left", help: "上个月") { model.moveCalendarMonth(-1) }
+                    QuietIconButton("chevron.right", help: "下个月") { model.moveCalendarMonth(1) }
+                    QuietIconButton("location", help: "回到今天") { model.selectCalendarDate(Date()) }
+                }
                     Spacer(minLength: 0)
                     ImportantTaskFilter(model: model)
                     TaskDropArea(onDrop: { model.rescheduleTask($0, due: nil) }) {
@@ -164,10 +171,6 @@ struct TaskCalendar: View {
                 model.quickCreateTask(date: searching || model.calendarUnscheduled ? nil : model.selectedCalendarDate)
             }, onOutsideClick: {}))
     }
-    private func iconButton(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { ActionIcon(icon) }
-            .buttonStyle(QuietButtonStyle(icon: true)).help(label).accessibilityLabel(label)
-    }
     private var monthGrid: some View {
         let groups = model.calendarGroups
         return VStack(spacing: 4) {
@@ -231,29 +234,16 @@ private struct CalendarTaskRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 TaskCardTitle(entry: entry, lines: 2) { model.beginEditing(entry) }.padding(.top, 4)
                 HStack(spacing: 8) {
-                    if showsDate { Text(entry.due.map { TaskDates.taskLabel($0, completed: entry.completed) } ?? "未安排").font(.system(size: 11)).foregroundStyle(.secondary) }
+                    if showsDate { Text(entry.dueLabel.isEmpty ? "未安排" : entry.dueLabel).font(.system(size: 11)).foregroundStyle(.secondary) }
                     if entry.hasConversation { ConversationShortcut(entry: entry, model: model, compact: true) }
                 }
             }
-            if entry.priority == "important" {
-                Button { model.changeTask(entry, priority: "normal") } label: { ActionIcon("star.fill") }
-                    .buttonStyle(QuietButtonStyle(icon: true)).foregroundStyle(.secondary).help("取消重要").accessibilityLabel("取消重要")
+            if entry.isImportant {
+                ImportantTaskToggle(entry: entry, model: model).foregroundStyle(.secondary)
             }
             if !entry.hasConversation { ConversationShortcut(entry: entry, model: model, revealed: hovering) }
-            Menu {
-                Button("编辑任务") { model.beginEditing(entry) }
-                Button(entry.hasConversation ? "打开对话" : "与 AI 讨论") { model.openConversation(entry) }.disabled(model.busy)
-                ForEach(TodoStatus.allCases, id: \.self) { status in
-                    Button(status.label) { model.changeTask(entry, status: status.rawValue) }
-                }
-                Button(entry.priority == "important" ? "取消重要" : "标记重要") {
-                    model.changeTask(entry, priority: entry.priority == "important" ? "normal" : "important")
-                }
-                Divider()
-                Button("删除任务", role: .destructive) { model.deleteTask(entry) }.disabled(model.busy)
-            } label: { ActionIcon("ellipsis") }
-                .actionMenuStyle()
-                .foregroundStyle(hovering ? .primary : .secondary).help("任务操作").accessibilityLabel("任务操作")
+            TaskActionMenu(entry: entry, model: model)
+                .foregroundStyle(hovering ? .primary : .secondary)
         }
         .padding(.vertical, 7).padding(.horizontal, 4)
         .background(hovering ? Color.primary.opacity(0.025) : .clear, in: RoundedRectangle(cornerRadius: 6))

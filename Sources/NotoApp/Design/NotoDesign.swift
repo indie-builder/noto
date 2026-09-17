@@ -57,3 +57,39 @@ struct ActionIcon: View {
             .frame(width: 28, height: 28)
     }
 }
+
+/// 图标按钮的统一形态：帮助与无障碍标签共用一份文案。
+struct QuietIconButton: View {
+    let icon: String
+    let help: String
+    let action: () -> Void
+    init(_ icon: String, help: String, action: @escaping () -> Void) {
+        self.icon = icon; self.help = help; self.action = action
+    }
+    var body: some View {
+        Button(action: action) { ActionIcon(icon) }
+            .buttonStyle(QuietButtonStyle(icon: true)).help(help).accessibilityLabel(help)
+    }
+}
+
+/// 关闭脏编辑器前的确认弹窗；行内编辑与任务编辑共用。
+struct UnsavedChangesAlert: ViewModifier {
+    @Binding var isPresented: Bool
+    var title = "保存修改？"
+    let canSave: Bool
+    let save: () -> Void
+    let discard: () -> Void
+    func body(content: Content) -> some View {
+        content.alert(title, isPresented: $isPresented) {
+            Button("保存") { save() }.disabled(!canSave)
+            Button("放弃修改", role: .destructive) { discard() }
+            Button("继续编辑", role: .cancel) { }
+        } message: { Text("关闭前可以保存修改，或继续编辑。") }
+    }
+}
+
+extension View {
+    func unsavedChangesAlert(isPresented: Binding<Bool>, title: String = "保存修改？", canSave: Bool, save: @escaping () -> Void, discard: @escaping () -> Void) -> some View {
+        modifier(UnsavedChangesAlert(isPresented: isPresented, title: title, canSave: canSave, save: save, discard: discard))
+    }
+}

@@ -238,6 +238,9 @@ final class AppModel: ObservableObject {
 
     func fail(_ error: Error) { message = error.localizedDescription; isError = true }
 
+    /// 设置或最近删除面板打开时，全局快捷指令全部让位。
+    var chromeLocked: Bool { settings || recentlyDeleted }
+
     // MARK: - 加载管线：版本号 + 代际计数，旧请求的结果直接丢弃。
 
     func reload(reset: Bool = false, debounce: Bool = false) {
