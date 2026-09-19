@@ -231,6 +231,60 @@ final class StoreTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(start), 5)
     }
 
+    func testDefaultURLResolutionOrder() throws {
+        let directory = tempDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let root = directory.appendingPathComponent("Noto", isDirectory: true)
+        let account = root.appendingPathComponent("accounts").appendingPathComponent("allocated.sqlite")
+        try FileManager.default.createDirectory(at: account.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data().write(to: account)
+        let pointer = root.appendingPathComponent("active-account.json")
+        let fallback = root.appendingPathComponent("notes.sqlite")
+
+        // NOTO_DATABASE 环境变量优先于一切。
+        XCTAssertEqual(Store.defaultURL(environment: ["NOTO_DATABASE": "/tmp/env.sqlite"], accountPointer: pointer, localRoot: root).path, "/tmp/env.sqlite")
+        // 指针指向 accounts 内真实存在的数据库时生效。
+        try JSONEncoder().encode(account.path).write(to: pointer)
+        XCTAssertEqual(Store.defaultURL(environment: [:], accountPointer: pointer, localRoot: root), account.standardizedFileURL)
+        // 指向 accounts 之外、不存在的数据库或损坏的指针文件都回落本机默认库。
+        try JSONEncoder().encode(directory.appendingPathComponent("elsewhere.sqlite").path).write(to: pointer)
+        XCTAssertEqual(Store.defaultURL(environment: [:], accountPointer: pointer, localRoot: root), fallback)
+        try JSONEncoder().encode(root.appendingPathComponent("accounts/missing.sqlite").path).write(to: pointer)
+        XCTAssertEqual(Store.defaultURL(environment: [:], accountPointer: pointer, localRoot: root), fallback)
+        try Data("not json".utf8).write(to: pointer)
+        XCTAssertEqual(Store.defaultURL(environment: [:], accountPointer: pointer, localRoot: root), fallback)
+    }
+
+    func testAgentFailuresSurfaceDiagnosableMessages() async throws {
+        let directory = tempDirectory()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        func script(_ name: String, _ body: String) throws -> String {
+            let executable = directory.appendingPathComponent(name)
+            try body.write(to: executable, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
+            return executable.path
+        }
+        func expectFailure(_ provider: Provider, executable: String, workspace: String, prompt: String = "test", _ fragment: String) async {
+            do {
+                _ = try AgentRunner().run(prompt: prompt, entries: [], provider: provider, executable: executable, workspaceURL: directory.appendingPathComponent(workspace))
+                XCTFail("这次调用必须失败")
+            } catch { XCTAssertTrue(error.localizedDescription.contains(fragment), error.localizedDescription) }
+        }
+        // Codex 的版本过旧提示要有专属文案，帮助用户区分更新与登录问题。
+        let outdated = try script("outdated", "#!/bin/sh\necho 'requires a newer version of Codex' >&2\nexit 1\n")
+        await expectFailure(.codex, executable: outdated, workspace: "ws-outdated", "版本过旧")
+        // 其余非零退出统一提示检查登录与额度。
+        let failing = try script("failing", "#!/bin/sh\necho boom >&2\nexit 1\n")
+        await expectFailure(.claude, executable: failing, workspace: "ws-failing", "未能完成请求")
+        // 超大输出整体拒绝，不进入解析，也不产生部分写入。
+        let huge = try script("huge", "#!/bin/sh\nhead -c 2200000 /dev/zero | tr '\\0' 'a'\nexit 0\n")
+        await expectFailure(.claude, executable: huge, workspace: "ws-huge", "输出过大")
+        // Kimi 命令行参数上限在启动前拒绝，并给出专属文案；提示词需低于全局上下文上限。
+        let oversizedPrompt = String(repeating: "问", count: 100_000)
+        await expectFailure(.kimi, executable: "/usr/bin/true", workspace: "ws-kimi", prompt: oversizedPrompt, "Kimi")
+    }
+
     func testDesktopLockWaitIsBoundedAndDoesNotLoseData() throws {
         let directory = tempDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

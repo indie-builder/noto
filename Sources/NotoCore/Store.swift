@@ -14,15 +14,20 @@ public final class Store: @unchecked Sendable {
         localURL.deletingLastPathComponent().appendingPathComponent("active-account.json")
     }
 
-    public static var defaultURL: URL {
-        if let path = ProcessInfo.processInfo.environment["NOTO_DATABASE"] { return URL(fileURLWithPath: path) }
-        let pointer = activeAccountPointer
-        if let data = try? Data(contentsOf: pointer), let path = try? JSONDecoder().decode(String.self, from: data) {
+    public static var defaultURL: URL { defaultURL() }
+
+    /// 解析顺序：NOTO_DATABASE 环境变量 > 指针指向 accounts 内已存在的数据库 > 本机默认库。
+    /// environment、accountPointer、localRoot 可注入，测试因此能覆盖各分支而不触碰真实用户目录。
+    public static func defaultURL(environment: [String: String] = ProcessInfo.processInfo.environment,
+                                  accountPointer: URL = Store.activeAccountPointer,
+                                  localRoot: URL = Store.localURL.deletingLastPathComponent()) -> URL {
+        if let path = environment["NOTO_DATABASE"] { return URL(fileURLWithPath: path) }
+        let accounts = localRoot.appendingPathComponent("accounts", isDirectory: true).standardizedFileURL.path + "/"
+        if let data = try? Data(contentsOf: accountPointer), let path = try? JSONDecoder().decode(String.self, from: data) {
             let url = URL(fileURLWithPath: path).standardizedFileURL
-            let root = localURL.deletingLastPathComponent().appendingPathComponent("accounts").standardizedFileURL.path + "/"
-            if url.path.hasPrefix(root), FileManager.default.fileExists(atPath: url.path) { return url }
+            if url.path.hasPrefix(accounts), FileManager.default.fileExists(atPath: url.path) { return url }
         }
-        return localURL
+        return localRoot.appendingPathComponent("notes.sqlite")
     }
 
     public init(url: URL? = Store.defaultURL, busyTimeout: TimeInterval = 1) throws {
