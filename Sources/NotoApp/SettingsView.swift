@@ -5,6 +5,8 @@ import NotoCore
 struct SettingsView: View {
     @ObservedObject var model: AppModel
     @State private var showDeleted = false
+    @State private var toolLocated: String?
+    @State private var toolChecked = false
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -25,6 +27,19 @@ struct SettingsView: View {
                             }.labelsHidden().pickerStyle(.menu)
                                 .help("下一次请求生效，正在执行的请求不受影响。")
                         }
+                        // 安装状态在选择时即可见，而不是等到第一次提问才失败。
+                        if toolChecked {
+                            if let toolLocated {
+                                Label {
+                                    Text("已找到：\(toolLocated)").lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                                } icon: {
+                                    Image(systemName: "checkmark.circle")
+                                }.font(NotoDesign.caption).foregroundStyle(.secondary)
+                            } else {
+                                Label("未找到 \(model.provider.title)，请先安装并在其中完成登录", systemImage: "exclamationmark.circle")
+                                    .font(NotoDesign.caption).foregroundStyle(.red)
+                            }
+                        }
                     }
                     VStack(spacing: 4) {
                         Button { showDeleted = true } label: {
@@ -41,6 +56,13 @@ struct SettingsView: View {
             .sheet(isPresented: $showDeleted) { RecentlyDeletedView(model: model).presentationBackground(.clear) }
 
             .onExitCommand { model.settings = false }
+            .task(id: model.provider) { refreshToolPath() }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in refreshToolPath() }
+    }
+    /// 与对话页同一套重检时机：切换工具或应用回到前台时重新定位。
+    private func refreshToolPath() {
+        toolLocated = model.provider.locate()
+        toolChecked = true
     }
 
     /// 标签在左、控件靠右对齐的一行；控件统一宽度让设置页两列对齐。
