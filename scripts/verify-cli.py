@@ -52,7 +52,9 @@ with tempfile.TemporaryDirectory(prefix='noto-cli-qa-') as directory:
     run('todo', 'update', '--id', converted['id'], '--status', 'in_progress', '--priority', 'important')
     assert run('note', 'convert-to-todo', '--id', note['id'])['status'] == 'in_progress'
     assert all('status' in row and 'priority' in row for row in run('export'))
-    print('PASS: task status, priority, partial update, conversion, completion timestamp, legacy aliases; create, idempotency, conflict, complete, filter, reopen, edit, clear date, invalid date, search, export')
+    run('conversation', '--id', '不存在的记录 ID', fails=True)
+    assert run('conversation', '--id', converted['id']) == []
+    print('PASS: task status, priority, partial update, conversion, completion timestamp, legacy aliases; create, idempotency, conflict, complete, filter, reopen, edit, clear date, invalid date, search, export, conversation id guard')
 
 # Agents learn the contract from --help alone: every subcommand, option and
 # argument must carry a description. Help sections indent entries by exactly

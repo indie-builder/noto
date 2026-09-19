@@ -258,7 +258,8 @@ final class SyncStoreTests: XCTestCase {
         XCTAssertEqual(deleted.last?.priority, "important")
         XCTAssertTrue(try XCTUnwrap(deleted.last).hasConversation)
         XCTAssertFalse(try XCTUnwrap(deleted.first).hasConversation)
-        XCTAssertTrue(try reopened.messages(for: firstID).isEmpty)
+        // 已删除的记录不再解析为可见对话：读取直接报「记录不存在」，而不是静默空列表。
+        XCTAssertThrowsError(try reopened.messages(for: firstID))
 
         try reopened.restoreTodo(id: firstID)
         XCTAssertEqual(try reopened.deletedTodos().map(\.id), [secondID])

@@ -30,7 +30,7 @@ final class StoreTests: XCTestCase {
         XCTAssertThrowsError(try store.appendQuestion(" \n ", to: original.id))
         XCTAssertEqual(try store.list(), [original])
         XCTAssertTrue(try store.messages(for: original.id).isEmpty)
-        XCTAssertTrue(try store.messages(for: "missing").isEmpty)
+        XCTAssertThrowsError(try store.messages(for: "missing"))
         XCTAssertNil(try store.entry(id: "missing"))
     }
 

@@ -15,8 +15,12 @@ extension Store {
         }
     }
 
+    /// 未知 ID 与「无对话」必须可区分：记录不存在时报错，存在的记录没有消息才返回空。
     public func messages(for entryID: String) throws -> [ChatMessage] {
-        try db.read { try ChatMessage.filter(Column("entryID") == entryID).order(Column("id")).fetchAll($0) }
+        try db.read { db in
+            guard try Entry.fetchOne(db, key: entryID) != nil else { throw NotoError("记录不存在。") }
+            return try ChatMessage.filter(Column("entryID") == entryID).order(Column("id")).fetchAll(db)
+        }
     }
 
     public func setExecution(_ text: String, for question: ChatMessage) throws {
