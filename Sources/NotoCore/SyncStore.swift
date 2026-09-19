@@ -254,11 +254,13 @@ extension Store {
         }
     }
 
+    /// 同步 descope 后暂无生产调用方：登录流程已移除，未配置账号时本接口不可用，
+    /// 仅供恢复同步时复用（迁移与 outbox 表按 README 保留）。
     public func importTasks(from source: Store) throws -> Int {
         let tasks = try source.todos()
         return try db.write { db in
             guard let account = try String.fetchOne(db, sql: "SELECT account_id FROM noto_sync_state WHERE id=1") else {
-                throw NotoError("请先登录账号再导入本机任务。")
+                throw NotoError("同步未启用，缺少账号标识，无法导入任务。")
             }
             var count = 0
             for var entry in tasks {
