@@ -123,7 +123,7 @@
 
 设置的最近删除行不带装饰性左图标，以便文字与上方设置项对齐。AI 品牌图标是识别信息，保留。
 
-AI 资源：[codex.png](../Sources/NotoApp/Resources/codex.png)、[claude.png](../Sources/NotoApp/Resources/claude.png)、[opencode.png](../Sources/NotoApp/Resources/opencode.png)、[kimi.png](../Sources/NotoApp/Resources/kimi.png)。通过 SwiftPM resources 随应用打包，`Provider.settingsIcon` 读取，显示尺寸 16×16，`isTemplate = true`，跟随系统深浅色。当前选项及菜单项均使用图标加工具名，不以图标代替工具名称。
+AI 资源：[codex.png](../Sources/NotoApp/Resources/codex.png)、[claude.png](../Sources/NotoApp/Resources/claude.png)、[opencode.png](../Sources/NotoApp/Resources/opencode.png)、[kimi.png](../Sources/NotoApp/Resources/kimi.png)。通过 SwiftPM resources 随应用打包，`Provider.settingsIcon` 读取，显示尺寸 16×16，`isTemplate = true`，跟随系统深浅色。当前选项及菜单项均使用图标加工具名，不以图标代替工具名称。应用图标再生成：`swift scripts/make-icon.swift <1024×1024 源图 PNG>` 后接其提示的 `iconutil` 命令，源图不入库。
 
 来源为 LobeHub `@lobehub/icons-static-png` 1.97.0，保留 [MIT 许可证](../Sources/NotoApp/Resources/LobeIcons-LICENSE.txt)。新增工具需要同时补齐名称、图标与授权记录；不添加运行时联网加载图标依赖。
 

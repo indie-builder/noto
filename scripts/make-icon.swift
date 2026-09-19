@@ -1,7 +1,16 @@
 import AppKit
 
-// Run from the project root: swift scripts/make-icon.swift
-let source = NSImage(contentsOfFile: "design/app-icon-selected.png")!
+// 从仓库根目录运行：swift scripts/make-icon.swift <1024×1024 源图 PNG>
+// 源图不入库；生成 build/AppIcon.iconset 后还需执行末尾提示的 iconutil 命令。
+let arguments = CommandLine.arguments
+guard arguments.count > 1 else {
+    FileHandle.standardError.write(Data("用法：swift scripts/make-icon.swift <1024×1024 源图 PNG>\n".utf8))
+    exit(2)
+}
+guard let source = NSImage(contentsOfFile: arguments[1]) else {
+    FileHandle.standardError.write(Data("无法读取源图：\(arguments[1])。需要一张 1024×1024 的 PNG。\n".utf8))
+    exit(1)
+}
 let directory = "build/AppIcon.iconset"
 try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
 for size in [16, 32, 128, 256, 512] {
@@ -23,3 +32,4 @@ for size in [16, 32, 128, 256, 512] {
             to: URL(fileURLWithPath: "\(directory)/icon_\(size)x\(size)\(suffix).png"))
     }
 }
+print("已生成 \(directory)；继续执行：iconutil -c icns \(directory) -o design/AppIcon.icns")

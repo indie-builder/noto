@@ -94,9 +94,10 @@ build/bin/noto doctor
 
 ```sh
 swift test
+zsh scripts/build.sh
 python3 scripts/verify-cli.py
 ```
 
-回归检查用 `verify-cli.py`；长历史测试数据用 `python3 scripts/seed-design-fixture.py /tmp/noto-new-fixture.sqlite`（拒绝覆盖已有数据库）。
+回归检查用 `verify-cli.py`；改动查询与时间线代码后跑 `python3 scripts/verify-performance.py`（20,000 条数据的临时工作负载，从不触碰用户数据，`--keep-fixture` 保留数据库供桌面分析）；长历史测试数据用 `python3 scripts/seed-design-fixture.py /tmp/noto-new-fixture.sqlite`（拒绝覆盖已有数据库）。
 
 SwiftUI + AppKit / GRDB + SQLite / Swift Argument Parser。构建脚本生成本机 ad-hoc 签名的应用，不是已公证的公开发行包。
