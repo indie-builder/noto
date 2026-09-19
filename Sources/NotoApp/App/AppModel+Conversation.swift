@@ -5,15 +5,15 @@ import NotoCore
 extension AppModel {
     func ask() {
         guard !busy, composerPosition != nil, let store else { return }
-        let input = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let input = drafts.composer.trimmed
         guard !input.isEmpty else { return }
         do {
-            if let conversation { chatDrafts[conversation.id] = chatDraft }
+            if let conversation { chatDrafts[conversation.id] = drafts.chat }
             newConversationOpen = false
             conversation = try store.startConversation(input)
             aiUsesCurrentView = false
             messages = try store.messages(for: conversation!.id)
-            draft = ""; composerPosition = nil; readingRequested = false; chatDraft = ""; chatError = ""; message = ""; reload()
+            drafts.composer = ""; composerPosition = nil; readingRequested = false; drafts.chat = ""; chatError = ""; message = ""; reload()
             requestReply()
         } catch { fail(error) }
     }
@@ -21,7 +21,7 @@ extension AppModel {
         guard leaveUnchangedEditor() else { return }
         composerPosition = nil; readingRequested = false
         if conversation == nil && !newConversationOpen {
-            newConversationOpen = true; messages = []; chatDraft = newConversationDraft
+            newConversationOpen = true; messages = []; drafts.chat = newConversationDraft
             chatError = ""; aiUsesCurrentView = false
         }
         NotificationCenter.default.post(name: .focusChat, object: nil)
@@ -30,38 +30,38 @@ extension AppModel {
     func openConversation(_ entry: Entry) {
         guard !busy, leaveUnchangedEditor() else { return }
         do {
-            if newConversationOpen { newConversationDraft = chatDraft }
+            if newConversationOpen { newConversationDraft = drafts.chat }
             newConversationOpen = false
             messages = try store?.messages(for: entry.id) ?? []
-            if let conversation { chatDrafts[conversation.id] = chatDraft }
+            if let conversation { chatDrafts[conversation.id] = drafts.chat }
             if conversation?.id != entry.id { aiUsesCurrentView = false }
-            conversation = entry; chatDraft = chatDrafts[entry.id] ?? ""; chatError = ""
+            conversation = entry; drafts.chat = chatDrafts[entry.id] ?? ""; chatError = ""
             composerPosition = nil; readingRequested = false
         } catch { fail(error) }
     }
     func closeConversation() {
         guard !busy else { return }
-        if let conversation { chatDrafts[conversation.id] = chatDraft }
-        if newConversationOpen { newConversationDraft = chatDraft }
+        if let conversation { chatDrafts[conversation.id] = drafts.chat }
+        if newConversationOpen { newConversationDraft = drafts.chat }
         newConversationOpen = false; conversation = nil
         readingRequested = true
     }
     func sendChat() {
         guard !busy, messages.last?.role != "user", let store else { return }
         if newConversationOpen {
-            guard !chatDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            guard !drafts.chat.isBlank else { return }
             do {
-                let entry = try store.startConversation(chatDraft)
+                let entry = try store.startConversation(drafts.chat)
                 conversation = entry; messages = try store.messages(for: entry.id)
-                chatDraft = ""; newConversationDraft = ""; newConversationOpen = false
+                drafts.chat = ""; newConversationDraft = ""; newConversationOpen = false
                 reload(); requestReply()
             } catch { chatError = error.localizedDescription }
             return
         }
         guard let conversation else { return }
         do {
-            try store.appendQuestion(chatDraft, to: conversation.id)
-            chatDraft = ""; messages = try store.messages(for: conversation.id)
+            try store.appendQuestion(drafts.chat, to: conversation.id)
+            drafts.chat = ""; messages = try store.messages(for: conversation.id)
             requestReply()
         } catch { chatError = error.localizedDescription }
     }

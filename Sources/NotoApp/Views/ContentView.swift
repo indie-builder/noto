@@ -3,7 +3,6 @@ import AppKit
 import NotoCore
 
 struct ContentView: View {
-    @Environment(\.openWindow) private var openWindow
     @ObservedObject var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("datesExpanded") private var datesExpanded = true
@@ -26,9 +25,9 @@ struct ContentView: View {
                             }
                             VStack(spacing: 0) {
                                 ZStack(alignment: .topLeading) {
-                                    if model.mode == .calendar { TaskCalendar(model: model).transition(.opacity) }
-                                    else if model.mode == .board { TaskBoard(model: model).transition(.opacity) }
-                                    else {
+                                    switch model.mode {
+                                    case .board: TaskBoard(model: model).transition(.opacity)
+                                    case .notes:
                                         ReadingPane(model: model, activeDay: $activeDay).transition(.opacity)
                                             .onReceive(NotificationCenter.default.publisher(for: .focusComposer)) { _ in
                                                 if model.composerPosition == CGPoint(x: 24, y: 40) { proxy.scrollTo("history-top", anchor: .top) }
@@ -133,8 +132,6 @@ struct ContentView: View {
         .toolbarBackground(.hidden, for: .windowToolbar)
         .onAppear {
             NotoMotion.start()
-            model.pill?.showWindow = { openWindow(id: "main") }
-            model.pill?.start()
         }
         .onChange(of: model.mode) { _, mode in
             NSApp.windows.first(where: { $0.identifier?.rawValue == "main" })?.isMovableByWindowBackground = mode == .notes
@@ -181,41 +178,41 @@ struct ContentView: View {
     }
     private var sidebarWidth: CGFloat { 168 }
     private func sidebar(proxy: ScrollViewProxy, height: CGFloat) -> some View {
-                            VStack(alignment: .leading, spacing: 6) {
-                                ForEach(ContentMode.allCases) { mode in
-                                    Button { model.switchMode(mode) } label: {
-                                        HStack(spacing: 10) {
-                                            SidebarBadge(symbol: mode.icon)
-                                            Text(mode.label); Spacer()
-                                        }.padding(.horizontal, 8).frame(height: 40)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .contentShape(Rectangle())
-                                            .background {
-                                                if model.mode == mode {
-                                                    RoundedRectangle(cornerRadius: 7).fill(Color.accentColor.opacity(0.10))
-                                                        .matchedGeometryEffect(id: "navigation", in: navigationSelection).allowsHitTesting(false)
-                                                }
-                                            }
-                                    }.buttonStyle(NavigationButtonStyle()).help(mode.label).accessibilityLabel(mode.label)
-                                        .accessibilityAddTraits(model.mode == mode ? .isSelected : [])
-                                }.padding(.horizontal, 8)
-                                if model.mode == .notes && !model.entries.isEmpty {
-                                    Text("日期").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-                                        .padding(.leading, 20).padding(.top, 22)
-                                    DateRail(model: model, expanded: true, activeDay: activeDay, maxHeight: height, width: sidebarWidth - 8) { id in
-                                        NotoMotion.perform(.navigation) { activeDay = id; proxy.scrollTo("content-" + id, anchor: .top) }
-                                    }
-                                } else { Spacer() }
-                                Button { model.settings = true } label: {
-                                    HStack(spacing: 10) {
-                                        SidebarBadge(symbol: "gearshape")
-                                        Text("设置"); Spacer()
-                                    }.frame(maxWidth: .infinity, alignment: .leading).padding(8).contentShape(Rectangle())
-                                }.buttonStyle(NavigationButtonStyle()).help("设置（⌘,）").accessibilityLabel("设置")
-                            }.font(.system(size: 13)).padding(.bottom, 12)
-                                .animation(NotoMotion.animation(.navigation), value: model.mode)
-                                .frame(width: sidebarWidth - 8)
-                                .padding(4)
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(ContentMode.allCases) { mode in
+                Button { model.switchMode(mode) } label: {
+                    HStack(spacing: 10) {
+                        SidebarBadge(symbol: mode.icon)
+                        Text(mode.label); Spacer()
+                    }.padding(.horizontal, 8).frame(height: 40)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .background {
+                            if model.mode == mode {
+                                RoundedRectangle(cornerRadius: 7).fill(Color.accentColor.opacity(0.10))
+                                    .matchedGeometryEffect(id: "navigation", in: navigationSelection).allowsHitTesting(false)
+                            }
+                        }
+                }.buttonStyle(NavigationButtonStyle()).help(mode.label).accessibilityLabel(mode.label)
+                    .accessibilityAddTraits(model.mode == mode ? .isSelected : [])
+            }.padding(.horizontal, 8)
+            if model.mode == .notes && !model.entries.isEmpty {
+                Text("日期").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+                    .padding(.leading, 20).padding(.top, 22)
+                DateRail(model: model, expanded: true, activeDay: activeDay, maxHeight: height, width: sidebarWidth - 8) { id in
+                    NotoMotion.perform(.navigation) { activeDay = id; proxy.scrollTo("content-" + id, anchor: .top) }
+                }
+            } else { Spacer() }
+            Button { model.settings = true } label: {
+                HStack(spacing: 10) {
+                    SidebarBadge(symbol: "gearshape")
+                    Text("设置"); Spacer()
+                }.frame(maxWidth: .infinity, alignment: .leading).padding(8).contentShape(Rectangle())
+            }.buttonStyle(NavigationButtonStyle()).help("设置（⌘,）").accessibilityLabel("设置")
+        }.font(.system(size: 13)).padding(.bottom, 12)
+            .animation(NotoMotion.animation(.navigation), value: model.mode)
+            .frame(width: sidebarWidth - 8)
+            .padding(4)
     }
     private var feedback: some View {
         HStack(spacing: 10) {

@@ -13,7 +13,7 @@ struct RecentlyDeletedView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("最近删除").font(.system(size: 16, weight: .semibold))
-                    Text(model.sync?.isSignedIn == true ? "当前账号空间 · 恢复后继续同步" : "本机空间")
+                    Text("本机空间")
                         .font(NotoDesign.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -45,7 +45,7 @@ struct RecentlyDeletedView: View {
                 }
             }
             if !error.isEmpty {
-                Label(error, systemImage: "exclamationmark.circle").font(NotoDesign.caption).foregroundStyle(.red)
+                ErrorLabel(text: error)
             }
         }.padding(24).background(NotoGlassSurface(radius: 20)).frame(width: 490, height: 470).buttonStyle(QuietButtonStyle())
             .task(id: model.store.map(ObjectIdentifier.init)) { await reload() }

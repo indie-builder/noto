@@ -1,10 +1,8 @@
 import SwiftUI
 import AppKit
-import Combine
 import NotoCore
-import NotoSync
 
-// 应用级状态中枢：持有数据快照、加载管线与账号切换。
+// 应用级状态中枢：持有数据快照与加载管线。
 // 业务动作按域拆在 AppModel+Editing / +Conversation / +Tasks，日期分组在 AppModel+Groups。
 
 /// 新建任务的完整草稿状态；attributes/baseline 对比得出 dirty。
@@ -19,7 +17,7 @@ struct TaskDraftState {
     var attributes: TaskDraftAttributes {
         TaskDraftAttributes(status: status, important: important, due: hasDue ? AppModel.dateKey(date) : nil)
     }
-    func dirty(text: String) -> Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || attributes != baseline }
+    func dirty(text: String) -> Bool { !text.isBlank || attributes != baseline }
     mutating func reset() {
         self = TaskDraftState()
     }
@@ -36,14 +34,12 @@ struct EditState {
 
 @MainActor
 final class AppModel: ObservableObject {
-    @Published var entries: [Entry] = [] { didSet { cachedGroups = nil } }
-    @Published var tasks: [Entry] = [] { didSet { invalidateTaskViews() } }
+    @Published var entries: [Entry] = [] { didSet { invalidateDerivedViews() } }
+    @Published var tasks: [Entry] = [] { didSet { invalidateDerivedViews() } }
     @Published var mode: ContentMode = .notes { didSet { if persistsViewMode { UserDefaults.standard.set(mode.rawValue, forKey: "contentMode") } } }
-    @Published var selectedCalendarDate = Date()
-    @Published var calendarUnscheduled = false
     @Published var taskDraftState = TaskDraftState()
-    @Published var dueOnly = false { didSet { invalidateTaskViews() } }
-    @Published var importantOnly = false { didSet { invalidateTaskViews() } }
+    @Published var dueOnly = false { didSet { invalidateDerivedViews() } }
+    @Published var importantOnly = false { didSet { invalidateDerivedViews() } }
     @Published var completedLimit = 20
     @Published var taskCreating = false
     @Published var edit = EditState()
@@ -66,17 +62,14 @@ final class AppModel: ObservableObject {
     @Published var conversation: Entry?
     @Published var messages: [ChatMessage] = []
     @Published var chatError = ""
-    @Published var editing: Entry? { didSet { cachedGroups = nil } }
+    @Published var editing: Entry? { didSet { invalidateDerivedViews() } }
     @Published var settings = false
     @Published var recentlyDeleted = false
     @Published var aiUsesCurrentView = false
     @Published var undoAvailable = false
     @Published var provider: Provider { didSet { UserDefaults.standard.set(provider.rawValue, forKey: "provider") } }
     private(set) var store: Store?
-    private(set) var pill: PillController?
-    @Published private(set) var sync: SyncController?
     @Published var lastDeletedTaskID: String?
-    private var syncSubscriptions = Set<AnyCancellable>()
     private let persistsViewMode: Bool
     var undoBefore: [Entry] = []
     var undoAfter: [Entry] = []
@@ -92,42 +85,24 @@ final class AppModel: ObservableObject {
     @Published private(set) var reloading = false
     private let pageSize = 40
     var chatDrafts: [String: String] = [:]
-    /// 逐键变化的输入文本在这里（见 TextDrafts）；draft/chatDraft/taskDraft/editDraft 保持既有 API。
+    /// 逐键变化的输入文本只住在这里（TextDrafts）；保存、清空、恢复都直接读写它。
     let drafts = TextDrafts()
-    var draft: String {
-        get { drafts.composer }
-        set { drafts.composer = newValue }
-    }
-    var chatDraft: String {
-        get { drafts.chat }
-        set { drafts.chat = newValue }
-    }
-    var taskDraft: String {
-        get { drafts.task }
-        set { drafts.task = newValue }
-    }
-    var editDraft: String {
-        get { drafts.edit }
-        set { drafts.edit = newValue }
-    }
-    var taskDraftDirty: Bool { taskDraftState.dirty(text: taskDraft) }
+    var taskDraftDirty: Bool { taskDraftState.dirty(text: drafts.task) }
     var editDirty: Bool {
         guard let entry = editing else { return false }
-        if editDraft != entry.text || editDue != entry.due { return true }
+        if drafts.edit != entry.text || editDue != entry.due { return true }
         return entry.kind == "todo" && (edit.status != entry.status || edit.important != (entry.priority == "important"))
     }
 
     init(store injectedStore: Store? = nil) {
         persistsViewMode = injectedStore == nil && ProcessInfo.processInfo.environment["NOTO_DATABASE"] == nil
         provider = Provider(rawValue: UserDefaults.standard.string(forKey: "provider") ?? "opencode") ?? .opencode
-        pill = PillController(appModel: self)
-        if let injectedStore {
-            store = injectedStore
+        store = injectedStore
+        if injectedStore == nil {
+            try? AgentWorkspace.migrateLegacy()
+            mode = ContentMode(rawValue: UserDefaults.standard.string(forKey: "contentMode") ?? "") ?? .notes
         }
-        if injectedStore == nil { try? AgentWorkspace.migrateLegacy() }
-        if injectedStore == nil { mode = ContentMode(rawValue: UserDefaults.standard.string(forKey: "contentMode") ?? "") ?? .notes }
         if let store {
-            attachSync(to: store)
             reload()
         }
         else if !isError {
@@ -139,10 +114,9 @@ final class AppModel: ObservableObject {
                         return try Store(url: url, busyTimeout: 1)
                     }.value
                     guard let self else { return }
-                    self.store = store; self.attachSync(to: store)
-                    // 本地数据先上屏；登录恢复（含 PowerSync 握手）放后台，网络慢时不再挡首屏。
+                    self.store = store
+                    // 数据库打开放后台任务，慢盘不挡首屏。
                     self.opening = false; self.reload()
-                    if ProcessInfo.processInfo.environment["NOTO_DATABASE"] == nil { await self.sync?.restoreSession() }
                 } catch {
                     self?.opening = false; self?.fail(error)
                 }
@@ -159,65 +133,21 @@ final class AppModel: ObservableObject {
         startupTask?.cancel(); reloadTask?.cancel(); pollTask?.cancel(); loadTask?.cancel()
     }
 
-    private func attachSync(to store: Store) {
-        let controller = SyncController(localStore: store)
-        sync = controller
-        controller.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &syncSubscriptions)
-        controller.$store.dropFirst().sink { [weak self] store in
-            self?.replaceAccountStore(store)
-        }.store(in: &syncSubscriptions)
-        controller.$dataRevision.dropFirst().sink { [weak self] _ in
-            // Sync writes use our own connection, so PRAGMA data_version cannot detect them.
-            self?.reload()
-        }.store(in: &syncSubscriptions)
-    }
-
-    /// 切换账号前拒绝一切未落库的草稿；编辑器脏态交给 leaveUnchangedEditor 处理。
-    func canChangeSyncAccount() -> Bool {
-        let hasDraft = !draft.isEmpty || !chatDraft.isEmpty || !newConversationDraft.isEmpty
-            || chatDrafts.contains { $0.key != conversation?.id && !$0.value.isEmpty }
-            || taskDraftState.dirty(text: taskDraft)
-        guard !busy, !hasDraft else {
-            fail(NotoError(busy ? "请先停止 AI 回复，再切换账号。" : "还有未保存的内容或对话草稿。请先保存、发送或清空草稿，再切换账号。"))
-            return false
-        }
-        return leaveUnchangedEditor()
-    }
-
-    /// 账号切换 = 丢弃旧账号的一切内存状态，回到与冷启动等价的空快照。
-    func replaceAccountStore(_ replacement: Store) {
-        guard store !== replacement else { return }
-        reloadTask?.cancel(); pollTask?.cancel(); loadTask?.cancel()
-        reloadGeneration += 1; dataVersion = nil
-        store = replacement
-        entries = []; tasks = []; messages = []; conversation = nil; chatDrafts = [:]; newConversationOpen = false; newConversationDraft = ""
-        aiUsesCurrentView = false
-        undoBefore = []; undoAfter = []; undoAvailable = false; lastDeletedTaskID = nil
-        editing = nil; editDraft = ""; edit = EditState(); draft = ""; chatDraft = ""; chatError = ""
-        taskCreating = false; taskDraftState.reset(); dueOnly = false
-        convertedTaskID = nil; highlightedTaskID = nil; taskToEditAfterReload = nil
-        composerPosition = nil; readingRequested = true; message = ""; isError = false
-        importantOnly = false; completedLimit = 20; hasMore = false
-        if search.isEmpty { reload(reset: true) } else { search = "" }
-    }
-
     nonisolated static func dateKey(_ date: Date) -> String {
         let parts = TaskDates.local.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", parts.year!, parts.month!, parts.day!)
     }
 
-    // 派生视图缓存；失效逻辑与分组在 AppModel+Groups。
-    var cachedGroups: [DayGroup]?
-    var groupsTimeZone = TimeZone.current
-    var cachedVisibleTasks: [Entry]?
-    var cachedCalendarTasks: [Entry]?
-    var cachedCalendarGroups: [String: [Entry]]?
-    var cachedTaskColumns: [String: [Entry]]?
-    func invalidateTaskViews() {
-        cachedVisibleTasks = nil; cachedCalendarTasks = nil
-        cachedCalendarGroups = nil; cachedTaskColumns = nil
+    // 派生视图的统一缓存：memo 按名字取/存，输入（entries/tasks/筛选/编辑器）一变整体失效。
+    private var derivedCache: [String: Any] = [:]
+    func memo<T>(_ key: String, _ make: () -> T) -> T {
+        if let value = derivedCache[key] as? T { return value }
+        let value = make()
+        derivedCache[key] = value
+        return value
     }
+    func invalidateDerivedViews() { derivedCache.removeAll() }
+    var groupsTimeZone = TimeZone.current
 
     func fail(_ error: Error) { message = error.localizedDescription; isError = true }
 
@@ -253,7 +183,6 @@ final class AppModel: ObservableObject {
                 if let tasks = result.2, tasks != self.tasks { self.tasks = tasks }
                 self.dataVersion = result.0
                 self.reloading = false
-                self.pill?.model.refresh()
                 if let id = self.taskToEditAfterReload {
                     self.taskToEditAfterReload = nil
                     if self.mode == .board, self.highlightedTaskID == id,

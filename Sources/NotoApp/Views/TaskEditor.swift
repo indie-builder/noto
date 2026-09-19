@@ -37,9 +37,7 @@ struct TaskEditor: View {
                 .frame(minHeight: 48).fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 18).padding(.bottom, 22)
             if !model.edit.error.isEmpty {
-                Label(model.edit.error, systemImage: "exclamationmark.circle")
-                    .font(NotoDesign.caption).foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true).padding(.bottom, 12)
+                ErrorLabel(text: model.edit.error).padding(.bottom, 12)
             }
             HStack(spacing: 4) {
                 TaskDateControl(hasDue: hasDue, date: date)
@@ -59,7 +57,7 @@ struct TaskEditor: View {
                 Spacer(minLength: 12)
                 Button(creating ? "创建" : "保存", action: save)
                     .buttonStyle(QuietButtonStyle(prominent: true)).help("⌘↵ 保存；回车换行")
-                    .disabled(text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(text.wrappedValue.isBlank)
             }
         }
         .padding(24).frame(width: 440)
@@ -67,7 +65,7 @@ struct TaskEditor: View {
         .interactiveDismissDisabled(model.editDirty || (creating && model.taskDraftDirty))
         .onExitCommand(perform: cancel)
         .unsavedChangesAlert(isPresented: $confirmClose, title: "保存任务修改？",
-                             canSave: !text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                             canSave: !text.wrappedValue.isBlank,
                              save: save, discard: { model.cancelEditing() })
     }
 }

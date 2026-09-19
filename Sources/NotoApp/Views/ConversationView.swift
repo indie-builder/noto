@@ -65,9 +65,8 @@ struct ConversationView: View {
                             HStack(spacing: 10) { ProgressView().controlSize(.small); Text("正在回复…").font(NotoDesign.caption).foregroundStyle(.secondary) }
                         }
                         if !model.chatError.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Label(model.chatError, systemImage: "exclamationmark.circle").font(NotoDesign.caption).textSelection(.enabled)
-                            }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                            Label(model.chatError, systemImage: "exclamationmark.circle").font(NotoDesign.caption).textSelection(.enabled)
+                                .padding(12).frame(maxWidth: .infinity, alignment: .leading)
                                 .background(Color.red.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
                         }
                         Color.clear.frame(height: 1).id("chat-bottom")
@@ -108,7 +107,7 @@ struct ConversationView: View {
                 Composer(text: $drafts.chat, purpose: .chat, onSubmit: { model.sendChat() }, onCancel: { model.closeConversation() })
                     .frame(minHeight: 40).fixedSize(horizontal: false, vertical: true)
                     .padding(14).background(NotoDesign.field, in: RoundedRectangle(cornerRadius: NotoDesign.radius))
-                        HStack {
+                HStack {
                     Spacer()
                     if model.busy {
                         Button { model.cancel() } label: { ActionIcon("stop.fill") }
@@ -116,7 +115,7 @@ struct ConversationView: View {
                     } else {
                         Button("发送") { model.sendChat() }
                             .buttonStyle(QuietButtonStyle(prominent: true)).help("发送消息（⌘ 回车）").accessibilityLabel("发送消息")
-                            .disabled(toolAvailable == false || pending || drafts.chat.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .disabled(toolAvailable == false || pending || drafts.chat.isBlank)
                     }
                 }.font(NotoDesign.caption)
             }.padding(.horizontal, 24).padding(.bottom, 20).padding(.top, 12)

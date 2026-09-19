@@ -69,10 +69,7 @@ struct UpdateNote: ParsableCommand {
     @OptionGroup var output: OutputOptions
     @Option var id: String
     @Option var text: String
-    func run() throws {
-        let store = try output.store()
-        try printJSON(store.updateNote(id: id, text: text))
-    }
+    func run() throws { try printJSON(output.store().updateNote(id: id, text: text)) }
 }
 struct UpdateTodo: ParsableCommand {
     static let configuration = CommandConfiguration(commandName: "update")
@@ -85,8 +82,7 @@ struct UpdateTodo: ParsableCommand {
     @Flag var clearDue = false
     func validate() throws { if clearDue && due != nil { throw ValidationError("Use either --due or --clear-due") } }
     func run() throws {
-        let store = try output.store()
-        try printJSON(store.updateTodo(id: id, text: title, due: due, clearDue: clearDue, status: status, priority: priority))
+        try printJSON(output.store().updateTodo(id: id, text: title, due: due, clearDue: clearDue, status: status, priority: priority))
     }
 }
 struct ConvertToTodo: ParsableCommand {
@@ -111,8 +107,7 @@ struct Export: ParsableCommand {
     @Flag var includeConversations = false
     func run() throws {
         let store = try output.store()
-        if includeConversations { try printJSON(store.backup()) }
-        else { try printJSON(store.list()) }
+        if includeConversations { try printJSON(store.backup()) } else { try printJSON(store.list()) }
     }
 }
 struct Doctor: ParsableCommand {

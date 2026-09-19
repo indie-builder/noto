@@ -94,7 +94,7 @@ struct ReadingPane: View {
 private struct NewContentInput: View {
     @ObservedObject var model: AppModel
     @ObservedObject var drafts: TextDrafts
-    private var empty: Bool { drafts.composer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var empty: Bool { drafts.composer.isBlank }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {

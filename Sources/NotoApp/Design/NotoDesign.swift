@@ -9,6 +9,29 @@ enum NotoDesign {
     static let radius: CGFloat = 12
 }
 
+extension View {
+    /// Fixed frame in one call; pairs with PillEdge.size(along:across:).
+    func frame(_ size: CGSize, alignment: Alignment = .center) -> some View {
+        frame(width: size.width, height: size.height, alignment: alignment)
+    }
+}
+
+extension String {
+    /// 去掉首尾空白；「非空才可保存」类判断统一走这里。
+    var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
+    var isBlank: Bool { trimmed.isEmpty }
+}
+
+/// 统一的行内错误提示；表单与面板共用。
+struct ErrorLabel: View {
+    let text: String
+    var body: some View {
+        Label(text, systemImage: "exclamationmark.circle")
+            .font(NotoDesign.caption).foregroundStyle(.red)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
 // Shared chrome for actions; native menus retain their keyboard behavior.
 
 /// 按压缩放 + 悬停衬底 + 禁用降透明，是全部按钮样式的公共内核。

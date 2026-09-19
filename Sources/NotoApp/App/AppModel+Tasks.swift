@@ -7,21 +7,20 @@ struct TaskDraftAttributes: Equatable {
     var due: String?
 }
 
-// 任务域：删除恢复、看板筛选与草稿、日历选择与重排。
+// 任务域：删除恢复、看板筛选与草稿。
 extension AppModel {
     func deleteTask(_ entry: Entry) {
         guard !busy, leaveUnchangedEditor(), let store else { return }
-        let unsentQuestion = conversation?.id == entry.id ? chatDraft : chatDrafts[entry.id] ?? ""
+        let unsentQuestion = conversation?.id == entry.id ? drafts.chat : chatDrafts[entry.id] ?? ""
         if !unsentQuestion.isEmpty {
             fail(NotoError("请先发送或清空这条任务的对话草稿。")); return
         }
         do {
             try store.deleteTodo(id: entry.id, expected: entry)
             lastDeletedTaskID = entry.id
-            if conversation?.id == entry.id { conversation = nil; messages = []; chatDraft = ""; readingRequested = true }
+            if conversation?.id == entry.id { conversation = nil; messages = []; drafts.chat = ""; readingRequested = true }
             chatDrafts.removeValue(forKey: entry.id)
             message = "已删除任务，可恢复上次删除。"; isError = false; reload()
-            sync?.kick()
         } catch { fail(error) }
     }
 
@@ -34,7 +33,6 @@ extension AppModel {
         try store.restoreTodo(id: id)
         if lastDeletedTaskID == id { lastDeletedTaskID = nil }
         message = "已恢复任务。"; isError = false; reload()
-        sync?.kick()
     }
 
     /// 最近删除列表：读取走 AppModel，按当前 store 身份丢弃过期结果。
@@ -63,6 +61,11 @@ extension AppModel {
         importantOnly = value; completedLimit = 20
     }
 
+    /// 看板与日历筛选行的统一清除动作。
+    func clearFilters() {
+        setSearch(""); setImportantOnly(false); dueOnly = false
+    }
+
     func showNewTask(status: String = "pending") {
         if taskCreating { return }
         guard leaveUnchangedEditor() else { return }
@@ -70,8 +73,8 @@ extension AppModel {
         taskDraftState.restored = taskDraftState.started && taskDraftDirty
         if !taskDraftState.restored {
             taskDraftState.status = status
-            taskDraftState.hasDue = mode == .calendar && !calendarUnscheduled
-            taskDraftState.date = selectedCalendarDate
+            taskDraftState.hasDue = false
+            taskDraftState.date = Date()
             taskDraftState.important = false
             taskDraftState.baseline = taskDraftState.attributes
         }
@@ -91,22 +94,18 @@ extension AppModel {
     }
 
     func saveNewTask() {
-        guard !taskDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard !drafts.task.isBlank else { return }
         do {
             guard let store else { throw NotoError("无法打开本地数据，草稿已保留。") }
-            let entry = try store.add(kind: "todo", text: taskDraft,
+            let entry = try store.add(kind: "todo", text: drafts.task,
                                       due: taskDraftState.hasDue ? Self.dateKey(taskDraftState.date) : nil,
                                       status: taskDraftState.status, priority: taskDraftState.important ? "important" : "normal")
-            taskCreating = false; taskDraftState.reset(); taskDraft = ""
+            taskCreating = false; taskDraftState.reset(); drafts.task = ""
             dueOnly = false
             if !search.isEmpty { search = "" }
             if importantOnly && entry.priority != "important" { importantOnly = false }
             remember(before: [], after: [entry], message: "已添加任务。")
             highlightedTaskID = entry.id
-            if mode == .calendar {
-                if let due = entry.due, let date = TaskDates.date(due) { selectedCalendarDate = date; calendarUnscheduled = false }
-                else { calendarUnscheduled = true }
-            }
         } catch { edit.error = error.localizedDescription }
     }
 
@@ -141,19 +140,4 @@ extension AppModel {
         if mode == .board { reload(reset: true) } else { switchMode(.board) }
     }
 
-    func selectCalendarDate(_ date: Date) {
-        guard leaveUnchangedEditor() else { return }
-        selectedCalendarDate = date; calendarUnscheduled = false
-    }
-    func moveCalendarMonth(_ offset: Int) { selectCalendarDate(TaskDates.movingMonth(offset, from: selectedCalendarDate)) }
-    func showUnscheduled() { guard leaveUnchangedEditor() else { return }; calendarUnscheduled = true }
-    @discardableResult
-    func rescheduleTask(_ entry: Entry, due: String?) -> Bool {
-        guard due == nil || TaskDates.date(due!) != nil else { return false }
-        guard changeTask(entry, due: due, clearDue: due == nil) else { return false }
-        if let due, let date = TaskDates.date(due) { selectedCalendarDate = date; calendarUnscheduled = false }
-        else { calendarUnscheduled = true }
-        highlightedTaskID = entry.id
-        return true
-    }
 }
