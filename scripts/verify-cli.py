@@ -53,3 +53,28 @@ with tempfile.TemporaryDirectory(prefix='noto-cli-qa-') as directory:
     assert run('note', 'convert-to-todo', '--id', note['id'])['status'] == 'in_progress'
     assert all('status' in row and 'priority' in row for row in run('export'))
     print('PASS: task status, priority, partial update, conversion, completion timestamp, legacy aliases; create, idempotency, conflict, complete, filter, reopen, edit, clear date, invalid date, search, export')
+
+# Agents learn the contract from --help alone: every subcommand, option and
+# argument must carry a description. Help sections indent entries by exactly
+# two spaces; a lone entry line is missing help unless its description wraps
+# onto the deeper-indented next line (happens for long flags).
+import re
+commands = [
+    [], ['note'], ['todo'],
+    ['note', 'add'], ['note', 'list'], ['note', 'update'], ['note', 'convert-to-todo'],
+    ['todo', 'add'], ['todo', 'list'], ['todo', 'complete'], ['todo', 'reopen'], ['todo', 'update'],
+    ['search'], ['export'], ['conversation'], ['doctor'], ['ask'],
+]
+bare_entry = re.compile(r'^  \S+(?:\s+<[^>]+>)?$')
+for command in commands:
+    result = subprocess.run([str(cli), *command, '--help'], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    for index, line in enumerate(lines):
+        if not bare_entry.match(line):
+            continue
+        following = lines[index + 1] if index + 1 < len(lines) else ''
+        if following.startswith(' ' * 8) and following.strip() and not following.strip().startswith('-'):
+            continue
+        raise AssertionError(f'`noto {" ".join(command)} --help` leaves {line.strip()!r} without a description')
+print(f'PASS: help describes every subcommand, option and argument across {len(commands)} command paths')

@@ -24,62 +24,62 @@ struct Todo: ParsableCommand {
     static let configuration = CommandConfiguration(abstract: "Manage todos.", subcommands: [AddTodo.self, ListTodos.self, Complete.self, Reopen.self, UpdateTodo.self])
 }
 struct AddNote: ParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "add")
+    static let configuration = CommandConfiguration(commandName: "add", abstract: "Save a note.")
     @OptionGroup var output: OutputOptions
-    @Option var text: String
+    @Option(help: "The note text to save.") var text: String
     @Option(help: "Idempotency key; reuse for retries of the same creation.") var requestId: String?
     func run() throws { try printJSON(output.store().add(kind: "note", text: text, requestID: requestId)) }
 }
 struct AddTodo: ParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "add")
+    static let configuration = CommandConfiguration(commandName: "add", abstract: "Create a todo.")
     @OptionGroup var output: OutputOptions
-    @Option var title: String
+    @Option(help: "The task title to save.") var title: String
     @Option(help: "Due date YYYY-MM-DD (does not schedule a timed notification).") var due: String?
-    @Option var requestId: String?
+    @Option(help: "Idempotency key; reuse for retries of the same creation.") var requestId: String?
     @Option(help: "pending, in_progress or completed") var status = "pending"
     @Option(help: "normal or important") var priority = "normal"
     func run() throws { try printJSON(output.store().add(kind: "todo", text: title, due: due, requestID: requestId, status: status, priority: priority)) }
 }
 struct ListNotes: ParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "list")
+    static let configuration = CommandConfiguration(commandName: "list", abstract: "List all notes.")
     @OptionGroup var output: OutputOptions
     func run() throws { try printJSON(output.store().list(kind: "note")) }
 }
 struct ListTodos: ParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "list")
+    static let configuration = CommandConfiguration(commandName: "list", abstract: "List todos, optionally filtered.")
     @OptionGroup var output: OutputOptions
     @Option(help: "all, open (pending + in_progress), pending, in_progress or completed") var status = "all"
     @Option(help: "normal or important; omitted means all") var priority: String?
     func run() throws { try printJSON(output.store().todos(status: status, priority: priority)) }
 }
 struct Complete: ParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "complete")
+    static let configuration = CommandConfiguration(commandName: "complete", abstract: "Mark a todo completed.")
     @OptionGroup var output: OutputOptions
-    @Option var id: String
+    @Option(help: "Full ID from a previous query result.") var id: String
     func run() throws { try printJSON(output.store().setCompleted(id: id, completed: true)) }
 }
 struct Reopen: ParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "reopen")
+    static let configuration = CommandConfiguration(commandName: "reopen", abstract: "Return a todo to pending.")
     @OptionGroup var output: OutputOptions
-    @Option var id: String
+    @Option(help: "Full ID from a previous query result.") var id: String
     func run() throws { try printJSON(output.store().setCompleted(id: id, completed: false)) }
 }
 struct UpdateNote: ParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "update")
+    static let configuration = CommandConfiguration(commandName: "update", abstract: "Replace a note's text.")
     @OptionGroup var output: OutputOptions
-    @Option var id: String
-    @Option var text: String
+    @Option(help: "Full ID from a previous query result.") var id: String
+    @Option(help: "The new note text.") var text: String
     func run() throws { try printJSON(output.store().updateNote(id: id, text: text)) }
 }
 struct UpdateTodo: ParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "update")
+    static let configuration = CommandConfiguration(commandName: "update", abstract: "Change a todo's title, due date, status or priority.")
     @OptionGroup var output: OutputOptions
-    @Option var id: String
-    @Option var title: String?
-    @Option var due: String?
+    @Option(help: "Full ID from a previous query result.") var id: String
+    @Option(help: "New title; omit to keep the current one.") var title: String?
+    @Option(help: "New due date YYYY-MM-DD (does not schedule a timed notification).") var due: String?
     @Option(help: "pending, in_progress or completed") var status: String?
     @Option(help: "normal or important") var priority: String?
-    @Flag var clearDue = false
+    @Flag(help: "Remove the due date (cannot be combined with --due).") var clearDue = false
     func validate() throws { if clearDue && due != nil { throw ValidationError("Use either --due or --clear-due") } }
     func run() throws {
         try printJSON(output.store().updateTodo(id: id, text: title, due: due, clearDue: clearDue, status: status, priority: priority))
@@ -88,37 +88,40 @@ struct UpdateTodo: ParsableCommand {
 struct ConvertToTodo: ParsableCommand {
     static let configuration = CommandConfiguration(commandName: "convert-to-todo", abstract: "Convert a note in place, preserving its ID and conversation.")
     @OptionGroup var output: OutputOptions
-    @Option var id: String
+    @Option(help: "Full ID from a previous query result.") var id: String
     func run() throws { try printJSON(output.store().convertToTodo(id: id)) }
 }
 struct Search: ParsableCommand {
+    static let configuration = CommandConfiguration(abstract: "Search notes, todos and conversation messages by text or due date.")
     @OptionGroup var output: OutputOptions
-    @Argument var query: String
+    @Argument(help: "Text to search for, matched as a substring.") var query: String
     func run() throws { try printJSON(output.store().page(limit: Int.max - 1, search: query).entries) }
 }
 struct Conversation: ParsableCommand {
     static let configuration = CommandConfiguration(abstract: "Read the full conversation attached to a note.")
     @OptionGroup var output: OutputOptions
-    @Option var id: String
+    @Option(help: "Full ID from a previous query result.") var id: String
     func run() throws { try printJSON(output.store().messages(for: id)) }
 }
 struct Export: ParsableCommand {
+    static let configuration = CommandConfiguration(abstract: "Export entries as JSON, optionally with conversations.")
     @OptionGroup var output: OutputOptions
-    @Flag var includeConversations = false
+    @Flag(help: "Also export full conversations; use this for a complete backup.") var includeConversations = false
     func run() throws {
         let store = try output.store()
         if includeConversations { try printJSON(store.backup()) } else { try printJSON(store.list()) }
     }
 }
 struct Doctor: ParsableCommand {
+    static let configuration = CommandConfiguration(abstract: "Locate installed AI CLIs.")
     func run() throws { try printJSON(Dictionary(uniqueKeysWithValues: Provider.allCases.map { ($0.rawValue, $0.locate() ?? "not found") })) }
 }
 struct Ask: ParsableCommand {
     static let configuration = CommandConfiguration(abstract: "Ask an installed AI CLI to propose actions. Writes only with --apply.")
     @OptionGroup var output: OutputOptions
-    @Argument var prompt: String
-    @Option var provider = "codex"
-    @Flag var apply = false
+    @Argument(help: "The request for the AI CLI.") var prompt: String
+    @Option(help: "codex, claude, opencode or kimi") var provider = "codex"
+    @Flag(help: "Apply the proposed actions; without this flag only suggestions are returned.") var apply = false
     func run() throws {
         guard let selected = Provider(rawValue: provider) else { throw ValidationError("Unknown provider") }
         let store = try output.store()
