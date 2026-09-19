@@ -10,7 +10,7 @@ enum NotoDesign {
 }
 
 extension View {
-    /// Fixed frame in one call; pairs with PillEdge.size(along:across:).
+    /// Fixed frame in one call.
     func frame(_ size: CGSize, alignment: Alignment = .center) -> some View {
         frame(width: size.width, height: size.height, alignment: alignment)
     }

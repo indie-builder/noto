@@ -61,7 +61,7 @@ extension AppModel {
         importantOnly = value; completedLimit = 20
     }
 
-    /// 看板与日历筛选行的统一清除动作。
+    /// 看板筛选行的统一清除动作。
     func clearFilters() {
         setSearch(""); setImportantOnly(false); dueOnly = false
     }

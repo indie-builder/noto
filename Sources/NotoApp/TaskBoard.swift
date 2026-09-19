@@ -175,7 +175,7 @@ private struct TaskColumn: View {
     }
 }
 
-/// 任务卡与日历行共用的操作菜单：编辑、对话、状态、重要、删除。
+/// 任务卡的操作菜单：编辑、对话、状态、重要、删除。
 struct TaskActionMenu: View {
     let entry: Entry
     @ObservedObject var model: AppModel
