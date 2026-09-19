@@ -22,8 +22,13 @@ struct RecentlyDeletedView: View {
             Color.clear.frame(height: 4)
             if loading { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
             else if entries.isEmpty {
-                Text("没有已删除的任务").font(NotoDesign.body).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if error.isEmpty {
+                    Text("没有已删除的任务").font(NotoDesign.body).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ErrorLabel(text: error)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
@@ -44,14 +49,20 @@ struct RecentlyDeletedView: View {
                     }.animation(NotoMotion.animation(.layout), value: entries.map(\.id))
                 }
             }
-            if !error.isEmpty {
+            if !error.isEmpty && !entries.isEmpty {
                 ErrorLabel(text: error)
             }
         }.padding(24).background(NotoGlassSurface(radius: 20)).frame(width: 490, height: 470).buttonStyle(QuietButtonStyle())
             .task(id: model.store.map(ObjectIdentifier.init)) { await reload() }
     }
     @MainActor private func reload() async {
-        entries = await model.deletedTasks()
+        do {
+            entries = try await model.deletedTasks()
+            error = ""
+        } catch {
+            entries = []
+            self.error = error.localizedDescription
+        }
         loading = false
     }
     private func restore(_ entry: Entry) {

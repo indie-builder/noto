@@ -330,4 +330,14 @@ final class InteractionTests: XCTestCase {
         XCTAssertEqual(model.tasks.first { $0.id == task.id }?.text, "CLI 已修改")
     }
 
+    @MainActor func testRecentlyDeletedReadFailureSurfacesInsteadOfEmptyList() async {
+        let model = AppModel(store: nil)
+        do {
+            _ = try await model.deletedTasks()
+            XCTFail("读取失败必须抛出，不能误报为空列表")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "无法打开本地数据。")
+        }
+    }
+
 }

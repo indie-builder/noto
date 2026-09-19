@@ -35,10 +35,10 @@ extension AppModel {
         message = "已恢复任务。"; isError = false; reload()
     }
 
-    /// 最近删除列表：读取走 AppModel，按当前 store 身份丢弃过期结果。
-    func deletedTasks() async -> [Entry] {
-        guard let store else { return [] }
-        let result = (try? await Task.detached(priority: .utility) { try store.deletedTodos() }.value) ?? []
+    /// 最近删除列表：读取走 AppModel，按当前 store 身份丢弃过期结果；读取失败要抛出，不能误报为空。
+    func deletedTasks() async throws -> [Entry] {
+        guard let store else { throw NotoError("无法打开本地数据。") }
+        let result = try await Task.detached(priority: .utility) { try store.deletedTodos() }.value
         guard store === self.store else { return [] }
         return result
     }
