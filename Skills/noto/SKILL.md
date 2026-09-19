@@ -46,15 +46,15 @@ Task status is `pending`, `in_progress`, or `completed`; priority is `normal` or
 
 `note convert-to-todo --id` converts the original record, preserving ID, creation time, text and conversation. It defaults to pending/normal; repeating the command on an existing task preserves its current properties. It does not create a duplicate task. Existing notes cannot receive task fields until converted.
 
-### Calendar placement
+### Due dates
 
-The calendar is another view of todos, grouped by the existing local `YYYY-MM-DD` due date. No event or time-slot record is needed.
+A todo's only date field is its local `YYYY-MM-DD` due date; no event or time-slot record is needed.
 
 ```sh
-# Move to September 11 in the task calendar; preserve status/priority/completedAt.
+# Set the due date to September 11; preserve status/priority/completedAt.
 noto todo update --id FULL_ID --due 2026-09-11 --json
-# Move to the Unscheduled tray, including for a completed task.
+# Remove the due date (unscheduled), including for a completed task.
 noto todo update --id FULL_ID --clear-due --json
 ```
 
-Completed tasks stay on their due date. Do not convert date-only strings through UTC. A structured `update` action uses the same due/clearDue fields; changing calendar placement must not infer or alter status or priority.
+Completed tasks keep their due date. Do not convert date-only strings through UTC. A structured `update` action uses the same due/clearDue fields; changing the due date must not infer or alter status or priority.

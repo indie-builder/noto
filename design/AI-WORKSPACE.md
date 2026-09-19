@@ -5,7 +5,7 @@
 | 内容 | 位置 | 生命周期 |
 | --- | --- | --- |
 | 笔记、任务、正式聊天历史、删除恢复数据 | `~/Library/Application Support/Noto/` 中的 SQLite 资料库 | 正式数据，不随缓存清理 |
-| 账号隔离资料库与必要配置 | `Application Support/Noto/` 的既有账号目录 | 保持现有隔离与同步机制 |
+| 账号隔离资料库与必要配置 | `Application Support/Noto/` 的既有账号目录 | 保持现有目录隔离机制 |
 | 界面偏好 | UserDefaults | 保持系统偏好存储 |
 | AI 会话工作区及可重建快照 | `~/Library/Caches/Noto/AI/` | 可删除，下次请求重建 |
 | 单次 AI 请求输入、stdout、stderr、结果文件 | 系统 `temporaryDirectory/Noto/AI/run-<UUID>/` | 正常完成、失败、取消时清理 |

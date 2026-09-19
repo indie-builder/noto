@@ -115,7 +115,7 @@ final class AppModel: ObservableObject {
                     }.value
                     guard let self else { return }
                     self.store = store
-                    // 本地数据先上屏；登录恢复（含 PowerSync 握手）放后台，网络慢时不再挡首屏。
+                    // 数据库打开放后台任务，慢盘不挡首屏。
                     self.opening = false; self.reload()
                 } catch {
                     self?.opening = false; self?.fail(error)
