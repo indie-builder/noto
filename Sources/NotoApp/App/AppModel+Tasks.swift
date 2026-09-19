@@ -7,7 +7,7 @@ struct TaskDraftAttributes: Equatable {
     var due: String?
 }
 
-// 任务域：删除恢复、看板筛选与草稿、日历选择与重排。
+// 任务域：删除恢复、看板筛选与草稿。
 extension AppModel {
     func deleteTask(_ entry: Entry) {
         guard !busy, leaveUnchangedEditor(), let store else { return }
@@ -21,7 +21,6 @@ extension AppModel {
             if conversation?.id == entry.id { conversation = nil; messages = []; drafts.chat = ""; readingRequested = true }
             chatDrafts.removeValue(forKey: entry.id)
             message = "已删除任务，可恢复上次删除。"; isError = false; reload()
-            sync?.kick()
         } catch { fail(error) }
     }
 
@@ -34,7 +33,6 @@ extension AppModel {
         try store.restoreTodo(id: id)
         if lastDeletedTaskID == id { lastDeletedTaskID = nil }
         message = "已恢复任务。"; isError = false; reload()
-        sync?.kick()
     }
 
     /// 最近删除列表：读取走 AppModel，按当前 store 身份丢弃过期结果。

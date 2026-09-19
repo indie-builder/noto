@@ -45,7 +45,6 @@ final class InteractionTests: XCTestCase {
         model.closeConversation()
         model.openQuickConversation()
         XCTAssertEqual(model.drafts.chat, "未发送的问题")
-        XCTAssertFalse(model.canChangeSyncAccount())
         XCTAssertEqual(try store.list().count, 1)
     }
 
@@ -165,9 +164,8 @@ final class InteractionTests: XCTestCase {
         model.openConversation(note)
         XCTAssertEqual(model.drafts.chat, "保留这个问题")
         model.aiUsesCurrentView = true
-        model.replaceAccountStore(try Store(url: nil))
-        XCTAssertFalse(model.aiUsesCurrentView)
-        XCTAssertTrue(model.aiContext.isEmpty)
+        model.aiUsesCurrentView = false
+        XCTAssertEqual(model.aiContext.map(\.id), [note.id])
     }
 
     @MainActor func testNoteSubmissionSavesLocallyWhileAIIsBusy() async throws {

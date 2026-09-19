@@ -2,14 +2,14 @@ import Foundation
 import GRDB
 
 // 持久化中枢：GRDB 打开与迁移。查询在 Store+Timeline，对话在 Store+Conversation，
-// 增改与撤销在 Store+Mutation；同步落库在 SyncStore.swift，传输在 NotoSync。
+// 增改与撤销在 Store+Mutation；同步落库在 SyncStore.swift（传输层已随 descope 移除）。
 // 模型类型（Entry/ChatMessage/TodoStatus 等）在 Models.swift。
 
 public final class Store: @unchecked Sendable {
     let db: any DatabaseWriter
     public let storageURL: URL?
 
-    /// CLI/App 共享的账号库指针文件：NotoSync 登录后写入，Store.defaultURL 读取。
+    /// CLI/App 共享的账号库指针文件：同步移除前的登录遗留，Store.defaultURL 读取以兼容旧安装。
     public static var activeAccountPointer: URL {
         localURL.deletingLastPathComponent().appendingPathComponent("active-account.json")
     }
