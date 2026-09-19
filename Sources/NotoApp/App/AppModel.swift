@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import NotoCore
 
-// 应用级状态中枢：持有数据快照、加载管线与账号切换。
+// 应用级状态中枢：持有数据快照与加载管线。
 // 业务动作按域拆在 AppModel+Editing / +Conversation / +Tasks，日期分组在 AppModel+Groups。
 
 /// 新建任务的完整草稿状态；attributes/baseline 对比得出 dirty。

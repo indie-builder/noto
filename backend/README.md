@@ -1,5 +1,7 @@
 # Noto backend
 
+> 2026-09-19: the macOS client removed sync in the revertable descope proposal (01efa7a). This directory is kept for a potential restore; the app no longer connects to any service here.
+
 Supabase Auth (email/password), PostgreSQL RPC uploads, and PowerSync downloads. Only tasks sync in this release. Notes and chat messages remain on the originating device; `hasConversation` is always false in cloud documents.
 
 ## Run the complete local integration stack
