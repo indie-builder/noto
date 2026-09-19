@@ -7,7 +7,7 @@ struct TaskDraftAttributes: Equatable {
     var due: String?
 }
 
-// 任务域：删除恢复、看板筛选与草稿、日历选择与重排。
+// 任务域：删除恢复、看板筛选与草稿。
 extension AppModel {
     func deleteTask(_ entry: Entry) {
         guard !busy, leaveUnchangedEditor(), let store else { return }
