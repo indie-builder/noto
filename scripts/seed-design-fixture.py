@@ -20,6 +20,12 @@ with sqlite3.connect(path) as db:
             text = notes[(day+row) % len(notes)]
             if day == 0 and row == 0:
                 text = '最近在想，笔记工具应该像桌边的一张纸。打开就能写，写完就能放下；需要整理时，再让 AI 帮忙把零散的片段连起来。所有界面都应该服务于这个简单的过程。'
-            db.execute('INSERT INTO entries (id,kind,text,due,completed,createdAt,updatedAt,hasConversation) VALUES (?,?,?,?,?,?,?,0)',
-                       (f'fixture-{day:03}-{row}', 'todo' if row else 'note', text if not row else f'回顾第 {day+1} 天的想法', (now-timedelta(days=day)).strftime('%Y-%m-%d') if row else None, row == 1 and day % 3 == 0, stamp, stamp))
+            # Mirror the v5_task_board backfill (kind='todo' only): direct
+            # INSERTs skip migrations, so legacy rows must carry the same
+            # status/priority/completedAt the app would have written; notes
+            # keep all three NULL, which validate() enforces on real writes.
+            completed = row == 1 and day % 3 == 0
+            db.execute('INSERT INTO entries (id,kind,text,due,completed,createdAt,updatedAt,hasConversation,status,priority,completedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                       (f'fixture-{day:03}-{row}', 'todo' if row else 'note', text if not row else f'回顾第 {day+1} 天的想法', (now-timedelta(days=day)).strftime('%Y-%m-%d') if row else None, completed, stamp, stamp, 0,
+                         ('completed' if completed else 'pending') if row else None, 'normal' if row else None, stamp if completed else None))
 print(f'Created {path}: 110 records across 55 days (visual QA only)')

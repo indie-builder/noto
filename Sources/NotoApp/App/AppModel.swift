@@ -1,10 +1,8 @@
 import SwiftUI
 import AppKit
-import Combine
 import NotoCore
-import NotoSync
 
-// 应用级状态中枢：持有数据快照、加载管线与账号切换。
+// 应用级状态中枢：持有数据快照与加载管线。
 // 业务动作按域拆在 AppModel+Editing / +Conversation / +Tasks，日期分组在 AppModel+Groups。
 
 /// 新建任务的完整草稿状态；attributes/baseline 对比得出 dirty。
@@ -71,9 +69,7 @@ final class AppModel: ObservableObject {
     @Published var undoAvailable = false
     @Published var provider: Provider { didSet { UserDefaults.standard.set(provider.rawValue, forKey: "provider") } }
     private(set) var store: Store?
-    @Published private(set) var sync: SyncController?
     @Published var lastDeletedTaskID: String?
-    private var syncSubscriptions = Set<AnyCancellable>()
     private let persistsViewMode: Bool
     var undoBefore: [Entry] = []
     var undoAfter: [Entry] = []
@@ -107,7 +103,6 @@ final class AppModel: ObservableObject {
             mode = ContentMode(rawValue: UserDefaults.standard.string(forKey: "contentMode") ?? "") ?? .notes
         }
         if let store {
-            attachSync(to: store)
             reload()
         }
         else if !isError {
@@ -119,10 +114,9 @@ final class AppModel: ObservableObject {
                         return try Store(url: url, busyTimeout: 1)
                     }.value
                     guard let self else { return }
-                    self.store = store; self.attachSync(to: store)
-                    // 本地数据先上屏；登录恢复（含 PowerSync 握手）放后台，网络慢时不再挡首屏。
+                    self.store = store
+                    // 数据库打开放后台任务，慢盘不挡首屏。
                     self.opening = false; self.reload()
-                    if ProcessInfo.processInfo.environment["NOTO_DATABASE"] == nil { await self.sync?.restoreSession() }
                 } catch {
                     self?.opening = false; self?.fail(error)
                 }
@@ -137,49 +131,6 @@ final class AppModel: ObservableObject {
     deinit {
         timer?.invalidate()
         startupTask?.cancel(); reloadTask?.cancel(); pollTask?.cancel(); loadTask?.cancel()
-    }
-
-    private func attachSync(to store: Store) {
-        let controller = SyncController(localStore: store)
-        sync = controller
-        controller.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &syncSubscriptions)
-        controller.$store.dropFirst().sink { [weak self] store in
-            self?.replaceAccountStore(store)
-        }.store(in: &syncSubscriptions)
-        controller.$dataRevision.dropFirst().sink { [weak self] _ in
-            // Sync writes use our own connection, so PRAGMA data_version cannot detect them.
-            self?.reload()
-        }.store(in: &syncSubscriptions)
-    }
-
-    /// 切换账号前拒绝一切未落库的草稿；编辑器脏态交给 leaveUnchangedEditor 处理。
-    func canChangeSyncAccount() -> Bool {
-        let hasDraft = !drafts.composer.isBlank || !drafts.chat.isBlank || !newConversationDraft.isBlank
-            || chatDrafts.contains { $0.key != conversation?.id && !$0.value.isBlank }
-            || taskDraftState.dirty(text: drafts.task)
-        guard !busy, !hasDraft else {
-            fail(NotoError(busy ? "请先停止 AI 回复，再切换账号。" : "还有未保存的内容或对话草稿。请先保存、发送或清空草稿，再切换账号。"))
-            return false
-        }
-        return leaveUnchangedEditor()
-    }
-
-    /// 账号切换 = 丢弃旧账号的一切内存状态，回到与冷启动等价的空快照。
-    func replaceAccountStore(_ replacement: Store) {
-        guard store !== replacement else { return }
-        reloadTask?.cancel(); pollTask?.cancel(); loadTask?.cancel()
-        reloadGeneration += 1; dataVersion = nil
-        store = replacement
-        entries = []; tasks = []; messages = []; conversation = nil; chatDrafts = [:]; newConversationOpen = false; newConversationDraft = ""
-        aiUsesCurrentView = false
-        undoBefore = []; undoAfter = []; undoAvailable = false; lastDeletedTaskID = nil
-        editing = nil; drafts.edit = ""; edit = EditState(); drafts.composer = ""; drafts.chat = ""; chatError = ""
-        taskCreating = false; taskDraftState.reset(); dueOnly = false
-        convertedTaskID = nil; highlightedTaskID = nil; taskToEditAfterReload = nil
-        composerPosition = nil; readingRequested = true; message = ""; isError = false
-        importantOnly = false; completedLimit = 20; hasMore = false
-        if search.isEmpty { reload(reset: true) } else { search = "" }
     }
 
     nonisolated static func dateKey(_ date: Date) -> String {

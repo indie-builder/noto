@@ -191,7 +191,7 @@ struct TaskActionMenu: View {
     }
 }
 
-/// 匹配计数 + 一键清除筛选；看板与日历的筛选行共用。
+/// 匹配计数 + 一键清除筛选；看板筛选行共用。
 struct FilterStatusRow: View {
     @ObservedObject var model: AppModel
     /// 到期筛选下的专属标题；不传则为「N 条匹配任务」。

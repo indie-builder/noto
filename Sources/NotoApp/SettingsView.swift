@@ -5,10 +5,6 @@ import NotoCore
 struct SettingsView: View {
     @ObservedObject var model: AppModel
     @State private var showDeleted = false
-    @State private var accountExpanded = false
-    private var accountSummary: String {
-        model.sync?.isSignedIn == true ? (model.sync?.email ?? "已登录") : "仅本机"
-    }
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -16,7 +12,7 @@ struct SettingsView: View {
                 Spacer()
                 Button("完成") { model.settings = false }
                     .help("关闭设置").accessibilityLabel("关闭设置")
-                    .disabled(model.sync?.isSyncing == true)
+
             }.padding(.horizontal, 40).padding(.vertical, 20)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -31,31 +27,6 @@ struct SettingsView: View {
                         }
                     }
                     VStack(spacing: 4) {
-                        Button { accountExpanded.toggle() } label: {
-                            HStack(spacing: 10) {
-                                Text("账号与同步").font(.system(size: 13, weight: .medium))
-                                Spacer(minLength: 8)
-                                Text(accountSummary)
-                                    .font(.system(size: 11)).foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                if model.sync?.lastError.isEmpty == false {
-                                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
-                                        .help("同步需要处理，展开查看详情")
-                                }
-                                Image(systemName: "chevron.right").font(.system(size: 10, weight: .medium))
-                                    .foregroundStyle(.secondary).rotationEffect(.degrees(accountExpanded ? 90 : 0))
-                            }.padding(.horizontal, 10).frame(height: 40).contentShape(Rectangle())
-                        }.buttonStyle(NavigationButtonStyle())
-                            .accessibilityLabel("账号与同步").accessibilityValue("\(accountSummary)，\(accountExpanded ? "已展开" : "已收起")")
-                            .accessibilityHint(model.sync?.lastError.isEmpty == false ? "同步需要处理，展开查看详情" : "")
-                        Group {
-                            if let sync = model.sync { SyncSettingsView(model: model, controller: sync) }
-                            else { Text("数据尚未加载。").font(NotoDesign.caption).foregroundStyle(.secondary) }
-                        }
-                        .padding(.horizontal, 10).padding(.bottom, accountExpanded ? 14 : 0)
-                        .frame(height: accountExpanded ? nil : 0, alignment: .top).clipped()
-                        .opacity(accountExpanded ? 1 : 0).disabled(!accountExpanded)
-                        .allowsHitTesting(accountExpanded).accessibilityHidden(!accountExpanded)
                         Button { showDeleted = true } label: {
                             HStack(spacing: 10) {
                                 Text("最近删除").font(.system(size: 13, weight: .medium))
@@ -64,13 +35,12 @@ struct SettingsView: View {
                             }.padding(.horizontal, 10).frame(height: 40).contentShape(Rectangle())
                         }.buttonStyle(NavigationButtonStyle()).accessibilityLabel("查看最近删除")
                     }.padding(6).background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 16))
-                        .animation(NotoMotion.animation(.layout), value: accountExpanded)
                 }.padding(.horizontal, 24).padding(.bottom, 24)
             }
         }.frame(width: 480, height: 460).background(NotoGlassSurface(radius: 20)).buttonStyle(QuietButtonStyle())
             .sheet(isPresented: $showDeleted) { RecentlyDeletedView(model: model).presentationBackground(.clear) }
-            .interactiveDismissDisabled(model.sync?.isSyncing == true)
-            .onExitCommand { if model.sync?.isSyncing != true { model.settings = false } }
+
+            .onExitCommand { model.settings = false }
     }
 
     /// 标签在左、控件靠右对齐的一行；控件统一宽度让设置页两列对齐。
