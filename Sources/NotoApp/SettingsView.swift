@@ -6,16 +6,6 @@ struct SettingsView: View {
     @ObservedObject var model: AppModel
     @State private var showDeleted = false
     @State private var accountExpanded = false
-    @AppStorage("pillEnabled") private var pillEnabled = true
-    @AppStorage("pillEdge") private var pillEdge = PillEdge.right.rawValue
-    @AppStorage("pillSurface") private var pillSurface = "glass"
-    @AppStorage("pillVisibility") private var pillVisibility = "hover"
-    private var edgeVisibility: Binding<String> {
-        Binding(get: { pillEnabled ? pillVisibility : "hidden" }, set: { value in
-            if value == "hidden" { pillEnabled = false }
-            else { pillVisibility = value; pillEnabled = true }
-        })
-    }
     private var accountSummary: String {
         model.sync?.isSignedIn == true ? (model.sync?.email ?? "已登录") : "仅本机"
     }
@@ -30,7 +20,6 @@ struct SettingsView: View {
             }.padding(.horizontal, 40).padding(.vertical, 20)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    appearancePage
                     settingsGroup {
                         settingsRow("AI 工具") {
                             Picker("AI 工具", selection: $model.provider) {
@@ -82,34 +71,6 @@ struct SettingsView: View {
             .sheet(isPresented: $showDeleted) { RecentlyDeletedView(model: model).presentationBackground(.clear) }
             .interactiveDismissDisabled(model.sync?.isSyncing == true)
             .onExitCommand { if model.sync?.isSyncing != true { model.settings = false } }
-    }
-
-    private var appearancePage: some View {
-        settingsGroup {
-            settingsRow("屏幕边缘") {
-                Picker("屏幕边缘", selection: edgeVisibility) {
-                    Text("悬停展开").tag("hover")
-                    Text("常驻").tag("always")
-                    Text("隐藏").tag("hidden")
-                }.labelsHidden().pickerStyle(.segmented)
-            }
-            settingsRow("位置") {
-                Menu {
-                    Picker("位置", selection: $pillEdge) {
-                        ForEach(PillEdge.allCases) { edge in Text(edge.label).tag(edge.rawValue) }
-                    }.pickerStyle(.inline)
-                    Button("恢复居中") { model.pill?.resetPosition() }.disabled(!pillEnabled)
-                } label: {
-                    Text((PillEdge(rawValue: pillEdge) ?? .right).label)
-                }.accessibilityLabel("边缘位置")
-            }
-            settingsRow("材质") {
-                Picker("材质", selection: $pillSurface) {
-                    Text("玻璃").tag("glass")
-                    Text("纯黑").tag("black")
-                }.labelsHidden().pickerStyle(.segmented)
-            }
-        }
     }
 
     /// 标签在左、控件靠右对齐的一行；控件统一宽度让设置页两列对齐。

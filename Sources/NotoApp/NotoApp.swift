@@ -13,11 +13,7 @@ struct NotoApp: App {
     @StateObject private var model = AppModel()
     var body: some Scene {
         Window("noto", id: "main") {
-            Group {
-                if CommandLine.arguments.contains("--preview-pill"), let pill = model.pill {
-                    PillPreviewView(model: pill.model)
-                } else { ContentView(model: model) }
-            }
+            ContentView(model: model)
                 .buttonStyle(QuietButtonStyle())
                 .frame(minWidth: 620, minHeight: 480)
                 .onAppear {
