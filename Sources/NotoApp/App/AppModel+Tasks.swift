@@ -7,7 +7,7 @@ struct TaskDraftAttributes: Equatable {
     var due: String?
 }
 
-// 任务域：删除恢复、看板筛选与草稿、日历选择与重排。
+// 任务域：删除恢复、看板筛选与草稿。
 extension AppModel {
     func deleteTask(_ entry: Entry) {
         guard !busy, leaveUnchangedEditor(), let store else { return }
@@ -21,7 +21,6 @@ extension AppModel {
             if conversation?.id == entry.id { conversation = nil; messages = []; drafts.chat = ""; readingRequested = true }
             chatDrafts.removeValue(forKey: entry.id)
             message = "已删除任务，可恢复上次删除。"; isError = false; reload()
-            sync?.kick()
         } catch { fail(error) }
     }
 
@@ -34,7 +33,6 @@ extension AppModel {
         try store.restoreTodo(id: id)
         if lastDeletedTaskID == id { lastDeletedTaskID = nil }
         message = "已恢复任务。"; isError = false; reload()
-        sync?.kick()
     }
 
     /// 最近删除列表：读取走 AppModel，按当前 store 身份丢弃过期结果。
@@ -75,8 +73,8 @@ extension AppModel {
         taskDraftState.restored = taskDraftState.started && taskDraftDirty
         if !taskDraftState.restored {
             taskDraftState.status = status
-            taskDraftState.hasDue = mode == .calendar && !calendarUnscheduled
-            taskDraftState.date = selectedCalendarDate
+            taskDraftState.hasDue = false
+            taskDraftState.date = Date()
             taskDraftState.important = false
             taskDraftState.baseline = taskDraftState.attributes
         }
@@ -108,10 +106,6 @@ extension AppModel {
             if importantOnly && entry.priority != "important" { importantOnly = false }
             remember(before: [], after: [entry], message: "已添加任务。")
             highlightedTaskID = entry.id
-            if mode == .calendar {
-                if let due = entry.due, let date = TaskDates.date(due) { selectedCalendarDate = date; calendarUnscheduled = false }
-                else { calendarUnscheduled = true }
-            }
         } catch { edit.error = error.localizedDescription }
     }
 
@@ -146,19 +140,4 @@ extension AppModel {
         if mode == .board { reload(reset: true) } else { switchMode(.board) }
     }
 
-    func selectCalendarDate(_ date: Date) {
-        guard leaveUnchangedEditor() else { return }
-        selectedCalendarDate = date; calendarUnscheduled = false
-    }
-    func moveCalendarMonth(_ offset: Int) { selectCalendarDate(TaskDates.movingMonth(offset, from: selectedCalendarDate)) }
-    func showUnscheduled() { guard leaveUnchangedEditor() else { return }; calendarUnscheduled = true }
-    @discardableResult
-    func rescheduleTask(_ entry: Entry, due: String?) -> Bool {
-        guard due == nil || TaskDates.date(due!) != nil else { return false }
-        guard changeTask(entry, due: due, clearDue: due == nil) else { return false }
-        if let due, let date = TaskDates.date(due) { selectedCalendarDate = date; calendarUnscheduled = false }
-        else { calendarUnscheduled = true }
-        highlightedTaskID = entry.id
-        return true
-    }
 }

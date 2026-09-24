@@ -65,20 +65,4 @@ extension AppModel {
     var taskColumns: [String: [Entry]] {
         memo("taskColumns") { Dictionary(grouping: visibleTasks, by: { $0.status ?? "pending" }) }
     }
-
-    var calendarTasks: [Entry] {
-        memo("calendarTasks") {
-            visibleTasks.sorted {
-                if $0.completed != $1.completed { return !$0.completed }
-                if $0.priority != $1.priority { return $0.priority == "important" }
-                return $0.createdAt == $1.createdAt ? $0.id < $1.id : $0.createdAt > $1.createdAt
-            }
-        }
-    }
-
-    var calendarGroups: [String: [Entry]] {
-        memo("calendarGroups") { Dictionary(grouping: calendarTasks, by: { $0.due ?? "" }) }
-    }
-
-    var calendarDetailTasks: [Entry] { calendarGroups[calendarUnscheduled ? "" : Self.dateKey(selectedCalendarDate)] ?? [] }
 }

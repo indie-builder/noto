@@ -26,7 +26,6 @@ struct ContentView: View {
                             VStack(spacing: 0) {
                                 ZStack(alignment: .topLeading) {
                                     switch model.mode {
-                                    case .calendar: TaskCalendar(model: model).transition(.opacity)
                                     case .board: TaskBoard(model: model).transition(.opacity)
                                     case .notes:
                                         ReadingPane(model: model, activeDay: $activeDay).transition(.opacity)
